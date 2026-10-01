@@ -716,6 +716,93 @@ async function handleMessageReceived() {
 // ============================================================
 const YH_DEFAULT_COLUMNS = ['发型', '妆容', '长相', '穿着', '状态', '场景', '氛围', '时间'];
 
+// 列名同义词表（canonical → 常见别名）
+// 背景：提示词正文用「服饰」等措辞，而定义列名是「穿着」等 → 弱模型按措辞输出 key
+//       精确查表 table[角色]['穿着'] 落空 → 单元格空白（表现为"明明写了却没显示"）
+const YH_COLUMN_ALIASES = {
+    '发型': ['发式', '头发', '发髻', '头发发型', '发型发式', '发饰发型'],
+    '妆容': ['化妆', '妆面', '妆', '面部妆容', '妆容妆面', '妆发'],
+    '长相': ['外貌', '容貌', '面容', '相貌', '五官', '样貌', '体型', '长相外貌', '面容体态'],
+    '穿着': ['服饰', '服装', '衣服', '衣着', '衣饰', '穿搭', '着装', '衣物', '穿着状态', '服饰与状态', '服饰状态', '服饰描述'],
+    '状态': ['动作', '姿势', '神态', '表情', '姿态', '动作神态', '状态动作', '姿势动作', '情绪'],
+    '场景': ['环境', '地点', '位置', '所在地', '背景', '场景环境', '所处环境', '场景地点'],
+    '氛围': ['气氛', '空气感', '氛围感', '氛围气氛'],
+    '时间': ['时辰', '剧情日期', '日期', '时间点', '时节', 'story_date'],
+};
+
+// 键名清洗：去空白/全角空格/标点，便于比对
+function yhCleanKey(k) {
+    return String(k == null ? '' : k).trim().replace(/[\s\u3000]/g, '').replace(/[：:（）()【】\[\]、，,。.·\-—_/]/g, '');
+}
+
+// 构造 别名 → 定义列名 映射（仅对当前存在的定义列生效）
+function yhBuildAliasMap(colNames) {
+    const map = {};
+    Object.keys(YH_COLUMN_ALIASES).forEach(cn => {
+        if (!colNames.includes(cn)) return;
+        YH_COLUMN_ALIASES[cn].forEach(al => { map[yhCleanKey(al)] = cn; });
+    });
+    return map;
+}
+
+// 解析单个 key → 定义列名（精确 → 同义词 → 包含关系兜底；无法识别返回 ''）
+function resolveColumnKey(key, colNames, aliasMap) {
+    const c = yhCleanKey(key);
+    if (!c) return '';
+    if (colNames.includes(c)) return c;
+    if (aliasMap && aliasMap[c]) return aliasMap[c];
+    for (const cn of colNames) { if (c.includes(yhCleanKey(cn))) return cn; }
+    if (aliasMap) { for (const al of Object.keys(aliasMap)) { if (c.includes(al)) return aliasMap[al]; } }
+    return '';
+}
+
+// 把 LLM 返回的 table 键名归一化到定义列名（定义名优先；同义词补齐；无法识别的 key 原样保留）
+function normalizeTableKeys(table, colNames) {
+    if (!table || typeof table !== 'object' || Array.isArray(table)) return table;
+    const aliasMap = yhBuildAliasMap(colNames);
+    const rows = Object.values(table);
+    // 扁平表兜底：{"服饰":"…","场景":"…"}（没有角色层级）→ 包一层单行，避免整表显示为空
+    if (rows.length && rows.every(v => typeof v === 'string' || typeof v === 'number')) {
+        const row = {};
+        Object.entries(table).forEach(([k, v]) => { row[resolveColumnKey(k, colNames, aliasMap) || yhCleanKey(k)] = v; });
+        return { '(未分角色)': row };
+    }
+    const out = {};
+    Object.entries(table).forEach(([role, row]) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) { out[role] = row; return; }
+        const nr = {};
+        // 第一遍：key 本身就是定义列名 → 直接落
+        Object.entries(row).forEach(([k, v]) => {
+            const c = yhCleanKey(k);
+            if (colNames.includes(c)) nr[c] = v;
+        });
+        // 第二遍：同义词/未知 key → 映射；不覆盖已有非空值
+        Object.entries(row).forEach(([k, v]) => {
+            const rc = resolveColumnKey(k, colNames, aliasMap);
+            const key = rc || yhCleanKey(k);
+            if (!key) return;
+            const cur = nr[key];
+            if (cur === undefined || cur === null || String(cur).trim() === '') nr[key] = v;
+        });
+        out[role] = nr;
+    });
+    return out;
+}
+
+// 单元格取值：精确列名 → 同义词兜底（兼容历史快照未归一化的数据）
+function lookupCellValue(row, colName, colNames, aliasMap) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return '';
+    const cur = row[colName];
+    if (cur !== undefined && cur !== null && String(cur).trim() !== '') return cur;
+    for (const k of Object.keys(row)) {
+        if (resolveColumnKey(k, colNames, aliasMap) === colName) {
+            const v = row[k];
+            if (v !== undefined && v !== null && String(v).trim() !== '') return v;
+        }
+    }
+    return (cur === undefined || cur === null) ? '' : cur;
+}
+
 // 手动总结：取最近 N 条对话 → LLM 总结 → 存快照 → 刷新表格（不生图）
 // 用途：自动总结失效/不到位时，用户主动补总结
 async function runManualSummary(count) {
@@ -909,6 +996,24 @@ async function updateSnapshots(context, table, storyDate, keepDays) {
     if (!md) return;
     if (!Array.isArray(md.yh_snapshots)) md.yh_snapshots = [];
     const snaps = md.yh_snapshots;
+    // 归一化键名（同义词 → 定义列名）+ 未提及的列继承上一轮值（代码侧兜底，不依赖模型自觉）
+    const a = getSettings().autoMode;
+    const colNames = (a.customColumns?.length ? a.customColumns.map(c => typeof c === 'string' ? c : c.name) : YH_DEFAULT_COLUMNS.slice());
+    table = normalizeTableKeys(table, colNames);
+    const prev = snaps.find(x => x.story_date === storyDate) || snaps[snaps.length - 1];
+    if (prev && prev.table && typeof prev.table === 'object') {
+        Object.keys(table).forEach(role => {
+            const row = table[role], prow = prev.table[role];
+            if (!row || typeof row !== 'object' || !prow || typeof prow !== 'object') return;
+            colNames.forEach(cn => {
+                const cur = row[cn];
+                if ((cur === undefined || cur === null || String(cur).trim() === '')
+                    && prow[cn] !== undefined && prow[cn] !== null && String(prow[cn]).trim() !== '') {
+                    row[cn] = prow[cn];
+                }
+            });
+        });
+    }
     const newSnap = { story_date: storyDate, table, ts: Date.now() };
     const idx = snaps.findIndex(s => s.story_date === storyDate);
     if (idx >= 0) snaps[idx] = newSnap;
@@ -1185,7 +1290,16 @@ function renderTableEditor() {
     const a2 = getSettings().autoMode;
     const cols2 = (a2.customColumns?.length ? a2.customColumns : YH_DEFAULT_COLUMNS.map(n => ({ name: n })));
     const colNames2 = cols2.map(c => typeof c === 'string' ? c : c.name);
+    const aliasMap2 = yhBuildAliasMap(colNames2);
     const roleNames = Object.keys(table);
+    // 定义列之外的列（如「配饰」）也显示，避免"数据在快照里却看不见"
+    const seenKeys = {};
+    roleNames.forEach(r => {
+        const row = table[r];
+        if (row && typeof row === 'object' && !Array.isArray(row)) Object.keys(row).forEach(k => { seenKeys[k] = 1; });
+    });
+    const extraCols = Object.keys(seenKeys).filter(k => !colNames2.includes(k) && !resolveColumnKey(k, colNames2, aliasMap2));
+    const allCols2 = colNames2.concat(extraCols);
     if (!roleNames.length) {
         $ed.append(`<div class="margin0" style="opacity:.5;font-size:12px;">快照日期：${escapeText(latest.story_date || '?')}（无角色数据，LLM 未返回 table）</div>`);
         return;
@@ -1196,12 +1310,12 @@ function renderTableEditor() {
     }
     let h = `<div class="margin0" style="opacity:.6;font-size:12px;margin-bottom:4px;">日期：${escapeText(latest.story_date || '?')} · ${escapeText(latest.label || '')}</div>`;
     h += '<div class="yh-table-scroll"><table class="yh-table"><thead><tr><th>角色</th>';
-    colNames2.forEach(n => h += `<th>${escapeText(n)}</th>`);
+    allCols2.forEach(n => h += `<th>${escapeText(n)}</th>`);
     h += '</tr></thead><tbody>';
     roleNames.forEach(r => {
         h += `<tr><td class="yh-table-role">${escapeText(r)}</td>`;
-        colNames2.forEach(n => {
-            const v = (table[r] && table[r][n]) || '';
+        allCols2.forEach(n => {
+            const v = lookupCellValue(table[r], n, colNames2, aliasMap2);
             h += `<td><input class="text_pole yh-cell" type="text" data-role="${escapeAttr(r)}" data-col="${escapeAttr(n)}" value="${escapeAttr(v)}"></td>`;
         });
         h += '</tr>';
