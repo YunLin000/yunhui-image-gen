@@ -1,0 +1,17 @@
+{
+  "name": "third-party/yunhui-image-gen",
+  "display_name": "云绘生图",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "style.css",
+  "author": "MOMO",
+  "version": "2.0.0",
+  "homePage": "",
+  "auto_update": false,
+  "minimum_client_version": "1.12.0",
+  "i18n": {
+    "zh-cn": "i18n/zh-cn.json"
+  }
+}

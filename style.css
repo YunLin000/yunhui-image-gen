@@ -1,0 +1,329 @@
+/* ============================================================
+   云绘生图 v2.0 — 全屏子面板 + 可拖拽悬浮按钮
+   全部用 ST CSS 变量（适配内置主题，不硬编码颜色）
+   ============================================================ */
+
+/* ===== 可拖拽悬浮按钮 ===== */
+#yh_fab {
+    position: fixed;
+    right: 12px;
+    top: 0; /* 实际位置由 js 像素定位（见 initFab），避免包含块百分比陷阱 */
+    transform: none;
+    z-index: 2147483646; /* 最高层之下，确保手机端可见可点 */
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--SmartThemeBlurTintColor, #2a2a2a);
+    color: var(--SmartThemeBodyColor, #eee);
+    border: 2px solid var(--SmartThemeBorderColor, #555);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transition: box-shadow 0.2s, opacity 0.2s;
+}
+#yh_fab:hover {
+    box-shadow: 0 0 12px var(--SmartThemeQuoteColor, #5caaff);
+}
+#yh_fab i {
+    font-size: 20px;
+}
+#yh_fab.dragging {
+    cursor: grabbing;
+    opacity: 0.8;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* ===== 全屏子面板 ===== */
+.yh-panel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh; /* 动态视口：手机地址栏/导航条自适应，避免底部被裁 */
+    min-height: 100vh;
+    z-index: 2147483647; /* 最高层，确保盖过 ST 一切 UI */
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.yh-panel {
+    width: 100%;
+    max-width: 900px;
+    margin: auto;
+    max-height: 100%;
+    background: var(--SmartThemeBlurTintColor, #1a1a1a);
+    color: var(--SmartThemeBodyColor, #eee);
+    border-left: 1px solid var(--SmartThemeBorderColor, #444);
+    border-right: 1px solid var(--SmartThemeBorderColor, #444);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.yh-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #444);
+    background: var(--black30aColor, #222);
+    flex-shrink: 0;
+}
+.yh-panel-title {
+    font-weight: bold;
+    font-size: 16px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.yh-panel-tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+.yh-panel-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--SmartThemeBodyColor, #ccc);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.yh-panel-tab.active {
+    background: var(--SmartThemeQuoteColor, #2a5);
+    color: #fff;
+    border-color: var(--SmartThemeBorderColor, #666);
+}
+.yh-panel-close {
+    background: transparent;
+    border: none;
+    color: var(--SmartThemeBodyColor, #ccc);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+.yh-panel-close:hover {
+    background: rgba(255, 80, 80, 0.3);
+    color: #fff;
+}
+.yh-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 14px;
+    padding-bottom: 90px; /* 底部留足：手机端最后一行按钮不被浏览器栏遮挡 */
+    overscroll-behavior: contain;
+}
+.yh-tab-pane {
+    display: none;
+}
+.yh-tab-pane.active {
+    display: block;
+}
+
+/* 手机适配 */
+@media (max-width: 600px) {
+    .yh-panel {
+        max-width: 100%;
+    }
+    .yh-panel-title {
+        font-size: 14px;
+    }
+    .yh-panel-tab {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+    .yh-panel-header {
+        gap: 6px;
+        padding: 8px 10px;
+    }
+}
+
+/* Tab 区段 */
+.yh-section {
+    margin-bottom: 18px;
+}
+.yh-section-title {
+    font-weight: bold;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--SmartThemeBorderColor, #444);
+    color: var(--SmartThemeBodyColor, #eee);
+}
+
+
+/* ===== 顶部公共区 ===== */
+.yh-common-section {
+    margin-bottom: 12px;
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.yh-common-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    background: var(--black30aColor, #222);
+    font-weight: bold;
+    color: var(--SmartThemeBodyColor, #eee);
+    user-select: none;
+}
+.yh-common-toggle:hover {
+    filter: brightness(1.15);
+}
+.yh-common-content {
+    padding: 12px;
+}
+.yh-common-chevron {
+    transition: transform 0.2s;
+}
+
+/* ===== 互斥灰化（对方模式启用时，本 tab 参数区变灰停用） ===== */
+.yh-pane-body.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    filter: grayscale(0.6);
+}
+
+/* tab 按钮灰化（对方模式启用时，本 tab 按钮也灰，视觉提示停用） */
+.yh-panel-tab.yh-tab-disabled {
+    opacity: 0.35;
+    text-decoration: line-through;
+    cursor: not-allowed;
+}
+
+/* ============================================================
+   模式2 末尾卡片（折叠卡片 + 三形态 + 按钮状态）
+   ============================================================ */
+.yh-card {
+    margin: 8px 0 4px;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 10px;
+    overflow: hidden;
+}
+.yh-card.collapsed .yh-card-body { display: none; }
+
+.yh-card-header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; cursor: pointer; user-select: none;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 70%, transparent);
+}
+.yh-card-header:hover { filter: brightness(1.1); }
+.yh-toggle { font-size: 14px; opacity: .7; min-width: 14px; }
+.yh-title { font-size: 13px; opacity: .85; }
+
+.yh-card-body { padding: 6px; }
+
+/* 竖排平铺 */
+.yh-vlist { display: flex; flex-direction: column; gap: 8px; }
+.yh-vitem { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+/* 网格 */
+.yh-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (max-width: 480px) { .yh-grid { grid-template-columns: 1fr; } }
+.yh-gitem { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+/* 左右翻页（默认）*/
+.yh-carousel { position: relative; display: flex; align-items: center; gap: 4px; }
+.yh-slider { flex: 1; overflow: hidden; }
+.yh-slide { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.yh-slide:not(.active) { display: none; }
+.yh-nav {
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 80%, transparent);
+    color: var(--SmartThemeBodyColor, #ccc);
+    border: none; border-radius: 50%;
+    width: 28px; height: 28px; cursor: pointer; font-size: 20px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.yh-nav:hover { filter: brightness(1.2); }
+.yh-dots { display: flex; justify-content: center; gap: 6px; margin: 6px 0; }
+.yh-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--SmartThemeFontColorInverted, #666);
+    opacity: .35; cursor: pointer;
+}
+.yh-dot.active { opacity: 1; }
+
+/* 单张 */
+.yh-single { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+/* 图片容器 + 下方按钮 */
+.yh-imgwrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.yh-imgbtns { display: flex; gap: 12px; }  /* 间隔加大防误触 */
+
+.yh-btn {
+    font-size: 13px; padding: 4px 9px;   /* 改前 12px/3px 8px → +10% */
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 6px; background: transparent;
+    color: var(--SmartThemeBodyColor, #ccc);
+    cursor: pointer; opacity: .85;
+    min-width: 40px; min-height: 30px;   /* 轻微触控余量 */
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.yh-btn:active { opacity: 1; background: var(--SmartThemeQuoteColor, #5caaff33); }
+.yh-btn:hover { opacity: 1; filter: brightness(1.15); }
+
+.yh-card-toolbar { display: flex; justify-content: center; gap: 12px; padding: 10px 0 4px; flex-wrap: wrap; }
+
+.yh-loading, .yh-failed {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; border-radius: 10px; font-size: 13px;
+}
+
+#yh-zoomer img { box-shadow: 0 6px 30px rgba(0,0,0,.5); }
+
+/* 总结列管理 */
+.yh-cols-list { display: flex; flex-direction: column; gap: 4px; }
+.yh-col-item { display: flex; align-items: center; gap: 6px; }
+.yh-col-name { font-size: 13px; min-width: 50px; }
+.yh-col-rule { flex: 1; font-size: 12px; padding: 2px 6px; }
+.yh-col-del { padding: 2px 6px; }
+
+/* 表格编辑器 */
+.yh-table-editor { max-height: 320px; overflow: auto; }
+.yh-table-scroll { overflow-x: auto; }
+.yh-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.yh-table th, .yh-table td { border: 1px solid var(--SmartThemeBorderColor, #555); padding: 3px; }
+.yh-table th { background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 60%, transparent); font-weight: normal; opacity: .8; }
+.yh-table-role { font-weight: bold; opacity: .85; white-space: nowrap; }
+.yh-cell { width: 100%; min-width: 60px; font-size: 11px; padding: 2px 4px; }
+
+/* 卡片微调：分页点可点、图片按钮不透明度 */
+.yh-dot { cursor: pointer; }
+.yh-imgbtns { flex-wrap: wrap; }
+.yh-imgwrap img { background: var(--SmartThemeBlurTintColor, #222); }
+
+/* 小输入框可点击提示（点击弹大窗） */
+.yh-col-rule { cursor: pointer; }
+.yh-cell { cursor: pointer; }
+.yh-col-rule:focus, .yh-cell:focus { outline: 1px solid var(--SmartThemeQuoteColor, #5caaff); }
+
+/* 提示词工程输入框：点击弹大窗 */
+#yh_summary_prompt, #yh_prompt_rules { cursor: pointer; }
+#yh_summary_prompt:focus, #yh_prompt_rules:focus { outline: 1px solid var(--SmartThemeQuoteColor, #5caaff); }
+
+/* 删除占位（提示词保留，可重新生成） */
+.yh-loading, .yh-failed, .yh-removed {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; border-radius: 8px; border: 1px dashed var(--SmartThemeBorderColor, #555);
+    color: var(--SmartThemeBodyColor, #ccc); font-size: 12px; background: transparent;
+}
+.yh-removed-tip { opacity: .7; }
