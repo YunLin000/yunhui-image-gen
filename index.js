@@ -1297,10 +1297,12 @@ async function generateImage(rawPrompt) {
     const body = {
         model: s.model,
         prompt,
-        negative_prompt: substituteParams(s.negativePrompt || ''),
         size,
         n: 1,
     };
+    // 负面提示词：留空则完全不上传该字段（部分接口如 OpenAI 官方生图不接受该字段）
+    const negPrompt = substituteParams(s.negativePrompt || '').trim();
+    if (negPrompt) body.negative_prompt = negPrompt;
 
     const controller = new AbortController();
     const timeout = (s.timeout || 360) * 1000;

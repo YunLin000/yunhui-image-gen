@@ -16,6 +16,7 @@ SillyTavern 第三方扩展 —— 通过 OpenAI 兼容 API 生图，支持标�
 - 多张图片卡片：左右翻页 / 竖排平铺 / 网格 三种展示形态
 - 内置提示词工程（7 步结构 / 元素三层 / 描写范围控制 / 第一人称视角）
 - 支持手动总结（自动总结失效时的兜底）
+- 删除图片只删图不删提示词（出现占位，可随时重新生成）
 - 支持 ComfyUI 桥接（云绘/MoeBridge）或任意 OpenAI 兼容 API
 
 ## 安装
@@ -47,7 +48,7 @@ SillyTavern/public/scripts/extensions/third-party/yunhui-image-gen/
 - 一个 OpenAI 兼容的生图 API（ComfyUI 桥接 / 云绘 / 其他）
 
 ## 版本
-v2.0.0
+v2.0.1
 
 ## 作者
 MOMO
