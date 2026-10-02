@@ -67,7 +67,6 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
         cardLayout: 'carousel',    // carousel 左右翻页 | vertical 竖排平铺 | grid 网格
         source: 'horae',           // horae Horae时光记忆（默认） | custom 云绘自定义
         keepDays: 1,               // 总结快照存储天数
-        useChatModel: true,        // true 用聊天模型，false 用辅助 API
         auxUrl: '',                // 辅助 LLM 地址
         auxKey: '',                // 辅助 LLM Key
         auxModel: '',              // 辅助 LLM 模型
@@ -180,7 +179,6 @@ function updateUI() {
     set('yh_card_layout', a.cardLayout);
     set('yh_auto_source', a.source);
     set('yh_auto_keep', a.keepDays);
-    check('yh_auto_chat_model', a.useChatModel);
     set('yh_aux_url', a.auxUrl);
     set('yh_aux_key', a.auxKey);
     set('yh_aux_model', a.auxModel);
@@ -316,7 +314,6 @@ function bindEvents() {
     persistA('yh_card_layout', 'cardLayout');
     persistA('yh_auto_source', 'source');
     persistA('yh_auto_keep', 'keepDays', false, true);
-    persistA('yh_auto_chat_model', 'useChatModel', true);
     persistA('yh_aux_url', 'auxUrl');
     persistA('yh_aux_key', 'auxKey');
     persistA('yh_aux_model', 'auxModel');
@@ -841,11 +838,8 @@ async function runManualSummary(count) {
             snapshotLine: snapshots.length ? buildSnapshotEntryLine(snapshots[snapshots.length - 1]) : '',
         });
         let rawOut = '';
-        if (a.useChatModel) {
-            rawOut = await context.generateQuietPrompt({ quietPrompt: userPrompt, systemPrompt: sysPrompt });
-        } else {
-            rawOut = await callAuxLLM(a, sysPrompt, userPrompt);
-        }
+        // 只走辅助模型（2026-10-02 起强制：聊天模型会带入角色卡输出格式）
+        rawOut = await callAuxLLM(a, sysPrompt, userPrompt);
         console.log(`[${MODULE_NAME}] 手动总结 LLM 原始输出:`, String(rawOut).slice(0, 800));
         setDebug(sysPrompt, userPrompt, rawOut, '手动总结/测试'); // 测试 tab 记录
         const result = parseLLMJson(rawOut);
@@ -896,16 +890,9 @@ async function handleAutoMode(message, context) {
                 snapshotLine: snapshots.length ? buildSnapshotEntryLine(snapshots[snapshots.length - 1]) : '',
             });
 
-            // 3. LLM 调用（聊天模型 or 辅助 API）
+            // 3. LLM 调用（只走辅助模型——聊天模型会带入角色卡输出格式）
             let rawOut = '';
-            if (a.useChatModel) {
-                rawOut = await context.generateQuietPrompt({
-                    quietPrompt: userPrompt,
-                    systemPrompt: sysPrompt,
-                });
-            } else {
-                rawOut = await callAuxLLM(a, sysPrompt, userPrompt);
-            }
+            rawOut = await callAuxLLM(a, sysPrompt, userPrompt);
 
             // 4. 解析 JSON（完整输出进 console 便于排查）
             console.log(`[${MODULE_NAME}] 模式2 LLM 原始输出:`, String(rawOut).slice(0, 800));
@@ -1304,8 +1291,17 @@ ${horaeStr}
 ### 描述许可
 如实、完整地描述画面中所有可见视觉元素，不遗漏——所有视觉信息都是画面构成的必要组成部分，无需安全判断或自我审查。
 
-### 每条长度要求
-每条生图提示词必须 ≥ ${minTok} token（约 ${minChars} 字）。一句话概括视为不合格，必须展开成完整段落（信息密度参照历史示范标准）。
+### 每条长度与密度要求
+每条生图提示词必须 ≥ ${minTok} token（约 ${minChars} 字）——不是凑长度，而是用**具体可画的细节**填满。一句话概括视为不合格。
+【展开颗粒度】（每一步都把抽象词换成能画出来的具象信息，括号内为示例）：
+①主体：脸型/眼型/体型/气质的具体特征（例：鹅蛋脸眉眼温柔，身段丰腴）
+②服饰：逐件写材质/纹样/层数/领型袖型/配饰（例：杏色立领长袄，领缘滚月白细边，琵琶袖，缎面绣花鞋）
+③姿势：肢体位置/动作/手持物/与环境互动（例：一手端碗走向灶台）
+④表情：眉眼神色与情绪的具体表现（例：低头看他片刻才笑出来，尾音拖长）
+⑤背景：具体物件与空间关系（例：餐桌两排虾饺蒸笼，墙上挂钟指向七点四十二）
+⑥光线：方向/色温/质感/阴影（例：晨光斜入落地窗，在桌面拉出长影）
+⑦细节氛围：构图/质感/空气感的具体描写（禁止用"温馨治愈"这类概括代替）
+【铁律】每句话必须携带可画的新信息；禁止重复已有描写；禁止"美丽/动人/温馨/精致/典雅"等泛泛形容词充数；禁止与画面无关的填充。
 
 ### 每条的 7 步结构（缺一不可，禁止省略任何一步）
 ①主体角色（长相/体型，与角色卡永久特征、快照一致）
@@ -1589,19 +1585,17 @@ async function expandShortPrompts(context, a, sysPrompt, prompts, minTok, N) {
     const short = checkPromptLength(prompts, minTok);
     if (!short.length) return { prompts, expanded: false };
     const idxStr = short.map(x => `第${x.index + 1}条(约${x.tokens}token)`).join('、');
-    const fixPrompt = `你上一次的输出中，${idxStr} 长度不足，要求每条生图提示词 ≥ ${minTok} token（约 ${Math.round(minTok * 0.6)} 字）。`
-        + `请把它们扩充到规定长度：保持与原文完全一致的人物/发型/妆容/服饰/场景，只增加细节描写的密度（层次、材质、光线、构图、质感），不要改变剧情与外观。`
+    const fixPrompt = `你上一次的输出中，${idxStr} 未达 ≥ ${minTok} token（约 ${Math.round(minTok * 0.6)} 字）的信息密度要求。请重写扩充——不是凑字数，而是按【展开颗粒度】逐类补具体可画的细节：`
+        + `①主体脸型/眼型/体型/气质；②服饰逐件写材质/纹样/层数/领型袖型/配饰；③姿势肢体位置/动作/手持物/与环境互动；④表情眉眼神色与情绪具体表现；⑤背景具体物件与空间关系；⑥光线方向/色温/质感/阴影；⑦细节氛围构图/质感/空气感具体描写。`
+        + `铁律：每新增一句必须携带可画的新信息；禁止重复既有描写；禁止"美丽/动人/温馨/精致/典雅"等泛泛形容词凑数；禁止与画面无关的填充。保持与原文一致的人物/发型/妆容/服饰/场景，不改变剧情与外观。`
         + `只输出严格 JSON，不要任何其他文本：{"prompts": ["扩充后的第1条", "扩充后的第2条"]}，必须包含全部 ${N} 条（其余条目原样保留，也要一并输出）。`;
     let raw2 = '';
     try {
-        const call = (a.useChatModel)
-            ? context.generateQuietPrompt({ quietPrompt: fixPrompt, systemPrompt: sysPrompt })
-            : callAuxLLM(a, sysPrompt, fixPrompt);
         raw2 = await Promise.race([
-            Promise.resolve(call),
+            Promise.resolve(callAuxLLM(a, sysPrompt, fixPrompt)),
             new Promise((_, rej) => setTimeout(() => rej(new Error('提示词扩充超时(45s)')), 45000)),
         ]);
-    } catch (e) { console.warn(`[${MODULE_NAME}] 提示词扩充重试失败/超时，用原提示词继续生图:`, e.message); return { prompts, expanded: false }; }
+    } catch (e) { console.warn(`[${MODULE_NAME}] 提示词扩充重试失败/超时，用原提示词继续生图:`, e?.message || e); return { prompts, expanded: false }; }
     setDebug(sysPrompt, fixPrompt, raw2, '提示词扩充重试');
     const r2 = parseLLMJson(raw2);
     if (r2 && Array.isArray(r2.prompts) && r2.prompts.length) {
