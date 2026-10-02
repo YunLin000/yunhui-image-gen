@@ -6,6 +6,7 @@
       <div class="yh-panel-tabs">
         <button class="yh-panel-tab active" data-yh-tab="yh_tab_pane1"><i class="fa-solid fa-tag"></i> 标签生图</button>
         <button class="yh-panel-tab" data-yh-tab="yh_tab_pane2"><i class="fa-solid fa-robot"></i> 自动生图</button>
+        <button class="yh-panel-tab" data-yh-tab="yh_tab_pane3"><i class="fa-solid fa-flask"></i> 测试</button>
       </div>
       <button class="yh-panel-close" id="yh_panel_close" title="关闭"><i class="fa-solid fa-xmark"></i></button>
     </div>
@@ -65,13 +66,14 @@
             <div class="yh-section-title">基本设置</div>
             <div class="flex-container flexnowrap"><label for="yh_auto_count" class="flex1">生图张数</label><input id="yh_auto_count" class="text_pole widthNatural" type="number" min="1" max="10" value="3"></div>
             <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_history" class="flex1">上传最近聊天记录条数</label><input id="yh_auto_history" class="text_pole widthNatural" type="number" min="1" max="50" value="10" title="喂给辅助 LLM 的最近对话条数，越多越懂剧情（费 token）"></div>
+            <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_min_tokens" class="flex1">每条提示词最小 token</label><input id="yh_auto_min_tokens" class="text_pole widthNatural" type="number" min="100" max="3000" step="50" value="500" title="每条生图提示词的最小 token 数；不足会带反馈重试一次，仍不足则卡片标注警告"></div>
             <label class="checkbox_label" for="yh_auto_save_mode" style="margin-top:6px;"><input type="checkbox" id="yh_auto_save_mode" class="checkbox"><span>省图模式（仅场景/服饰变化时生图）</span></label>
             <label class="checkbox_label" for="yh_card_expanded" style="margin-top:6px;"><input type="checkbox" id="yh_card_expanded" class="checkbox"><span>卡片默认展开</span></label>
             <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_card_layout" class="flex1">卡片排列</label><select id="yh_card_layout" class="text_pole widthNatural margin0"><option value="carousel">左右翻页（默认）</option><option value="vertical">竖排平铺</option><option value="grid">网格</option></select></div>
           </div>
           <div class="yh-section">
             <div class="yh-section-title">总结数据源</div>
-            <div class="flex-container flexnowrap"><label for="yh_auto_source" class="flex1">数据源</label><select id="yh_auto_source" class="text_pole widthNatural margin0"><option value="horae">Horae 时光记忆（默认）</option><option value="custom">云绘自定义</option></select></div>
+            <div class="flex-container flexnowrap"><label for="yh_auto_source" class="flex1">数据源</label><select id="yh_auto_source" class="text_pole widthNatural margin0"><option value="horae">Horae 时光记忆（默认）</option><option value="custom">云绘自定义</option><option value="snapshot">时光记忆+总结（逐条分组）</option></select></div>
             <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_keep" class="flex1">总结存储天数</label><input id="yh_auto_keep" class="text_pole widthNatural" type="number" min="1" max="30" value="1"></div>
             <label class="checkbox_label" for="yh_auto_chat_model" style="margin-top:6px;"><input type="checkbox" id="yh_auto_chat_model" class="checkbox" checked><span>使用聊天模型（否则用辅助 API）</span></label>
           </div>
@@ -114,6 +116,24 @@
               <button id="yh_table_save" class="menu_button flex1"><i class="fa-solid fa-floppy-disk"></i> 保存表格到聊天元数据</button>
               <button id="yh_table_refresh" class="menu_button menu_button_icon" title="刷新"><i class="fa-solid fa-rotate"></i></button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Tab3: 测试/调试 ===== -->
+      <div class="yh-tab-pane" id="yh_tab_pane3">
+        <div class="yh-pane-body" style="margin-top:8px;">
+          <div class="yh-section">
+            <div class="yh-section-title">LLM 请求/响应调试（点击框查看全文）</div>
+            <div class="margin0" style="opacity:.6;font-size:12px;margin-bottom:4px;">LLM 完整请求体（system + user 拼接）：</div>
+            <div id="yh_test_req" class="yh-test-box" title="点击查看全文"></div>
+            <div class="margin0" style="opacity:.6;font-size:12px;margin:4px 0;">LLM 响应体（原始返回）：</div>
+            <div id="yh_test_resp" class="yh-test-box" title="点击查看全文"></div>
+            <div class="flex-container flexnowrap" style="margin-top:6px;gap:6px;">
+              <button id="yh_test_run" class="menu_button flex1"><i class="fa-solid fa-flask"></i> 测试流程（不生产）</button>
+              <button id="yh_test_clear" class="menu_button"><i class="fa-solid fa-broom"></i> 清空</button>
+            </div>
+            <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">「测试流程」走完收集数据→拼请求→调用LLM→解析全过程，但不调生图；正常聊天自动生图也会实时把请求/响应写进这里。</div>
           </div>
         </div>
       </div>

@@ -108,6 +108,35 @@
     color: #fff;
     border-color: var(--SmartThemeBorderColor, #666);
 }
+.yh-test-box {
+    min-height: 90px;
+    max-height: 140px;
+    overflow: auto;
+    border: 1px solid var(--SmartThemeBorderColor, #555);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: var(--SmartThemeBlurTintColor, rgba(40,40,40,.5));
+    cursor: pointer;
+    opacity: .85;
+    transition: opacity .15s;
+}
+.yh-test-box:hover { opacity: 1; }
+.yh-test-box:empty::before { content: '（暂无数据）'; opacity: .5; }
+.yh-pinned { position: relative; }
+.yh-pinned .yh-cell { background: rgba(255, 215, 0, .08); border-color: rgba(255, 215, 0, .45) !important; }
+.yh-pin-badge {
+    position: absolute;
+    top: 1px;
+    right: 3px;
+    font-size: 10px;
+    line-height: 1;
+    pointer-events: none;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,.6));
+}
 .yh-panel-close {
     background: transparent;
     border: none;

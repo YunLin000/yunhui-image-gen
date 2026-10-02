@@ -29,6 +29,7 @@ let yhMouseDown = null; // 桌面端鼠标按下坐标（拖动/划选不触发�
 let yhDialogOpenedAt = 0; // 弹窗创建时间（防同一次点击穿透到弹窗按钮）
 let fsOpenedAt = 0; // 看图模式打开时间（防打开瞬间被残留点击立即关闭）
 let yhPanelOpenedAt = 0; // 面板打开时间（防打开瞬间被残留点击立即关闭）
+let yhLastDebug = { sys: '', user: '', raw: '', ts: 0, source: '' }; // 最近一次 LLM 请求/响应（测试 tab 用）
 
 // ---------------- 默认设置 ----------------
 const defaultSettings = {
@@ -71,7 +72,8 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
         auxKey: '',                // 辅助 LLM Key
         auxModel: '',              // 辅助 LLM 模型
         auxModels: [],             // 辅助模型列表（持久化，回显用）
-        historyCount: 10,          // 上传给辅助 LLM 的最近聊天记录条数
+        historyCount: 10,          // 上传给辅助 LLM 的最近聊天记录条数（完整上传不截断）
+        minTokensPerPrompt: 500,    // 每条生图提示词最小 token 数（不足带反馈重试一次，仍不足则报错不送生图）
         manualCount: 30,           // 手动总结时取的对话条数（持久化记忆）
         customColumns: [           // 总结表格列定义（可自定义，贯穿提示词/UI/快照）
             { name: '发型', rule: '' },
@@ -169,6 +171,7 @@ function updateUI() {
     check('yh_auto_enabled', a.enabled);
     set('yh_auto_count', a.imageCount);
     set('yh_auto_history', a.historyCount);
+    set('yh_auto_min_tokens', a.minTokensPerPrompt);
     set('yh_manual_count', a.manualCount || 30);
     check('yh_auto_save_mode', a.saveMode);
     check('yh_card_expanded', a.cardExpanded);
@@ -304,6 +307,7 @@ function bindEvents() {
     });
     persistA('yh_auto_count', 'imageCount', false, true);
     persistA('yh_auto_history', 'historyCount', false, true);
+    persistA('yh_auto_min_tokens', 'minTokensPerPrompt', false, true);
     persistA('yh_auto_save_mode', 'saveMode', true);
     persistA('yh_card_expanded', 'cardExpanded', true);
     persistA('yh_card_layout', 'cardLayout');
@@ -417,6 +421,12 @@ function bindEvents() {
     });
     // 辅助模型刷新
     $('#yh_aux_refresh').on('click', refreshAuxModels);
+
+    // ===== 测试 tab（LLM 请求/响应调试）=====
+    $('#yh_test_run').on('click', function () { setTimeout(runTestFlow, 60); });
+    $('#yh_test_clear').on('click', function () { yhLastDebug = { sys: '', user: '', raw: '', ts: 0, source: '' }; renderTestTab(); });
+    $('#yh_test_req').on('click', function () { showBigViewer('LLM 请求体（system + user）', buildDebugRequestText()); });
+    $('#yh_test_resp').on('click', function () { showBigViewer('LLM 响应体（原始返回）', yhLastDebug.raw || '（暂无数据）'); });
     // 公共区折叠切换
     $('#yh_common_toggle').on('click', function () {
         $('#yh_common_content').slideToggle(150);
@@ -817,12 +827,16 @@ async function runManualSummary(count) {
     $btn.prop('disabled', true).html('⏳ 总结中...');
     if (!s.silent) toastr.info(`正在总结最近 ${n} 条对话...`);
     try {
-        const recentChat = getRecentMessages(context.chat, n);
-        const horaeState = (a.source === 'horae' && typeof window.Horae?.getLatestState === 'function') ? safeHoraeState() : null;
         const snapshots = getSnapshots(context);
+        const horaeState = (a.source !== 'custom' && typeof window.Horae?.getLatestState === 'function') ? safeHoraeState() : null;
+        const grouped = (a.source === 'snapshot');
+        const recentChat = await getRecentMessages(context.chat, n, { useRegex: true, grouped, snapshots });
         const cols = (a.customColumns?.length ? a.customColumns : YH_DEFAULT_COLUMNS.map(nm => ({ name: nm })));
         const sysPrompt = buildAutoSystemPrompt(cols, snapshots, horaeState, a);
-        const userPrompt = buildAutoUserPrompt(recentChat, a);
+        const userPrompt = buildAutoUserPrompt(recentChat, a, {
+            horaeLine: horaeState ? buildHoraeMetaLine(horaeState) : '',
+            snapshotLine: snapshots.length ? buildSnapshotEntryLine(snapshots[snapshots.length - 1]) : '',
+        });
         let rawOut = '';
         if (a.useChatModel) {
             rawOut = await context.generateQuietPrompt({ quietPrompt: userPrompt, systemPrompt: sysPrompt });
@@ -830,6 +844,7 @@ async function runManualSummary(count) {
             rawOut = await callAuxLLM(a, sysPrompt, userPrompt);
         }
         console.log(`[${MODULE_NAME}] 手动总结 LLM 原始输出:`, String(rawOut).slice(0, 800));
+        setDebug(sysPrompt, userPrompt, rawOut, '手动总结/测试'); // 测试 tab 记录
         const result = parseLLMJson(rawOut);
         if (!result) { if (!s.silent) toastr.error('总结失败：LLM 返回无法解析（按 F12 看"手动总结 LLM 原始输出"）'); return; }
         let table = (result.table && typeof result.table === 'object' && Object.keys(result.table).length) ? result.table : null;
@@ -866,14 +881,17 @@ async function handleAutoMode(message, context) {
             }
 
             // 1. 取输入
-            const recentChat = getRecentMessages(context.chat, a.historyCount || 10);
-            const horaeState = (a.source === 'horae' && typeof window.Horae?.getLatestState === 'function')
-                ? safeHoraeState() : null;
             const snapshots = getSnapshots(context);
+            const horaeState = (a.source !== 'custom' && typeof window.Horae?.getLatestState === 'function') ? safeHoraeState() : null;
+            const grouped = (a.source === 'snapshot');
+            const recentChat = await getRecentMessages(context.chat, a.historyCount || 10, { useRegex: true, grouped, snapshots });
 
             // 2. 构造 prompt
             const sysPrompt = buildAutoSystemPrompt((a.customColumns?.length ? a.customColumns : YH_DEFAULT_COLUMNS.map(n => ({ name: n }))), snapshots, horaeState, a);
-            const userPrompt = buildAutoUserPrompt(recentChat, a);
+            const userPrompt = buildAutoUserPrompt(recentChat, a, {
+                horaeLine: horaeState ? buildHoraeMetaLine(horaeState) : '',
+                snapshotLine: snapshots.length ? buildSnapshotEntryLine(snapshots[snapshots.length - 1]) : '',
+            });
 
             // 3. LLM 调用（聊天模型 or 辅助 API）
             let rawOut = '';
@@ -888,10 +906,20 @@ async function handleAutoMode(message, context) {
 
             // 4. 解析 JSON（完整输出进 console 便于排查）
             console.log(`[${MODULE_NAME}] 模式2 LLM 原始输出:`, String(rawOut).slice(0, 800));
+            setDebug(sysPrompt, userPrompt, rawOut, '自动生图'); // 测试 tab 记录
             const result = parseLLMJson(rawOut);
             if (!result || !Array.isArray(result.prompts) || result.prompts.length === 0) {
                 if (!s.silent) toastr.warning('自动生图：LLM 未返回有效提示词');
                 console.warn(`[${MODULE_NAME}] LLM 输出解析失败:`, String(rawOut).slice(0, 300));
+                // 失败也产卡片（可重试），不静默消失
+                if (!message.extra) message.extra = {};
+                message.extra.yh_card = {
+                    prompts: [], images: [], status: ['failed'], expanded: a.cardExpanded ?? true,
+                    layout: a.cardLayout || 'carousel', currentPage: 0,
+                    error: 'LLM 未返回有效提示词' + (isHoraeEmpty(horaeState) ? '（Horae 无数据，已完全依赖对话推导）' : '（按 F12 查看 LLM 原始输出，或点下方重试）'),
+                };
+                renderYunhuiCard(message, msgEl);
+                await context.saveChat();
                 return;
             }
 
@@ -913,9 +941,18 @@ async function handleAutoMode(message, context) {
                 if (!s.silent) toastr.warning('LLM 未返回总结表格（表格区将为空）');
             }
 
-            // 6. 逐个生图 + 卡片展示（替代 ST 原生 swipe，用折叠卡片）
+            // 6. 提示词长度校验 + 扩充重试
             const N = Math.min(result.prompts.length, a.imageCount || 1);
-            const prompts = result.prompts.slice(0, N);
+            let prompts = result.prompts.slice(0, N);
+            const minTok = a.minTokensPerPrompt || 500;
+            if (checkPromptLength(prompts, minTok).length) {
+                if (!s.silent) toastr.info(`有 ${checkPromptLength(prompts, minTok).length} 条提示词不足 ${minTok} token，正在扩充...`);
+                const ex = await expandShortPrompts(context, a, sysPrompt, prompts, minTok, N);
+                prompts = ex.prompts;
+            }
+            const shortFinal = checkPromptLength(prompts, minTok);
+            const promptWarn = shortFinal.length ? `（${shortFinal.length} 条仍未达 ${minTok} token）` : '';
+            // 7. 逐个生图 + 卡片展示（替代 ST 原生 swipe，用折叠卡片）
             if (!message.extra) message.extra = {};
             message.extra.yh_card = {
                 prompts: prompts.slice(),
@@ -936,7 +973,7 @@ async function handleAutoMode(message, context) {
                 renderYunhuiCard(message, msgEl);
                 await context.saveChat();
             }
-            if (!s.silent) toastr.success(`自动生图完成`);
+            if (!s.silent) toastr.success(`自动生图完成${promptWarn}`);
         } catch (e) {
             console.error(`[${MODULE_NAME}] 自动生图错误:`, e);
             if (!s.silent) toastr.error(`自动生图失败: ${e.message}`);
@@ -946,29 +983,101 @@ async function handleAutoMode(message, context) {
     }, 50);
 }
 
-// 取最近 N 条消息文本（含角色名，去 HTML 标签）
-function getRecentMessages(chat, n) {
+// ============================================================
+//  聊天记录获取：发送版正则过滤（学酒馆）+ 剥 HTML + 剥思考标签，完整上传不截断
+// ============================================================
+let _regexEngineCache = null;
+async function loadRegexEngine() {
+    if (_regexEngineCache) return _regexEngineCache;
+    try { _regexEngineCache = await import('../../../extensions/regex/engine.js'); }
+    catch (e) { console.warn(`[${MODULE_NAME}] regex engine 加载失败，仅做基础剥标签:`, e); _regexEngineCache = false; }
+    return _regexEngineCache;
+}
+// 发送版正则过滤（与酒馆发送给 LLM 的文本一致；正则过滤后才是真正聊天记录）
+async function applyRegexFilter(text) {
+    const eng = await loadRegexEngine();
+    if (!eng || typeof eng.getRegexedString !== 'function') return text;
+    try {
+        const placement = (eng.regex_placement && eng.regex_placement.AI_OUTPUT !== undefined) ? eng.regex_placement.AI_OUTPUT : 2;
+        return eng.getRegexedString(String(text), { placement }, { isPrompt: true });
+    } catch (e) { return text; }
+}
+// 剥 HTML 标签 + 思考内容（部分后端把 reasoning 写进正文；先剥思考块再剥其他标签，否则标签被先吃掉内容会留下）
+function stripChatText(text) {
+    return String(text)
+        .replace(/```(?:thought|reasoning|think)\b[\s\S]*?```/gi, '')
+        .replace(/<(?:thinking|thought|reasoning|think)\b[^>]*>[\s\S]*?<\/(?:thinking|thought|reasoning|think)>/gi, '')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+}
+// 把快照条目化（比 JSON.stringify 更省 token 且模型更易读）
+function buildSnapshotEntryLine(snap) {
+    if (!snap || !snap.table || typeof snap.table !== 'object') return '';
+    const rows = Object.keys(snap.table).map(r => {
+        const row = snap.table[r]; if (!row || typeof row !== 'object') return null;
+        const parts = Object.keys(row).map(k => (row[k] != null && String(row[k]).trim()) ? `${k}:${row[k]}` : null).filter(Boolean).join(' | ');
+        return parts ? `${r}→${parts}` : null;
+    }).filter(Boolean);
+    return rows.length ? rows.join('；') : '';
+}
+// 把单条消息的 Horae meta 精简成状态卡行
+function buildHoraeMetaLine(h) {
+    if (!h || typeof h !== 'object') return '';
+    const bits = [];
+    const ts = h.timestamp || {};
+    const sd = ts.story_date || h.story_date || '';
+    const st = ts.story_time || h.story_time || '';
+    if (sd) bits.push(`时间:${sd}${st ? ' ' + st : ''}`);
+    const loc = (h.scene && h.scene.location) || h.location || '';
+    if (loc) bits.push(`地点:${loc}`);
+    const cp = (h.scene && Array.isArray(h.scene.characters_present)) ? h.scene.characters_present
+        : (Array.isArray(h.characters_present) ? h.characters_present : []);
+    if (cp.length) bits.push(`在场:${cp.join('/')}`);
+    const cs = h.costumes || {};
+    const csBits = Object.keys(cs).map(n => {
+        const c = cs[n];
+        const str = (typeof c === 'string') ? c : (c && typeof c === 'object' ? Object.values(c).filter(v => v != null && String(v).trim()).join(',') : '');
+        return str ? `${n}(${str})` : null;
+    }).filter(Boolean);
+    if (csBits.length) bits.push(`服装:${csBits.join(' / ')}`);
+    return bits.join(' | ');
+}
+// 取最近 N 条消息文本（完整不截断；发送版正则过滤+剥标签+剥思考；可选分组模式：每条附当时 Horae + 当天快照）
+async function getRecentMessages(chat, n, opts = {}) {
     const start = Math.max(0, chat.length - n);
     const out = [];
     for (let i = start; i < chat.length; i++) {
         const m = chat[i];
         if (!m || !m.mes) continue;
         const name = m.is_user ? '用户' : (m.name || m.send_as || 'AI');
-        const text = String(m.mes).replace(/<[^>]*>/g, '').slice(0, 500);
-        if (i === chat.length - 1) {
-            out.push('【最新消息·本次生图与总结的依据】\n' + name + ': ' + text);
-        } else {
-            out.push('（历史消息·仅作上下文参考）' + name + ': ' + text);
+        let text = stripChatText(m.mes);
+        if (opts.useRegex) text = await applyRegexFilter(text);
+        const isLast = (i === chat.length - 1);
+        let block = isLast
+            ? `【最新消息·本次生图与总结的依据】\n${name}: ${text}`
+            : `（历史·第${i - start + 1}条·仅供参考）${name}: ${text}`;
+        // 分组模式：每条消息后附当时 Horae 状态 + 当天快照条目
+        if (opts.grouped) {
+            const hMeta = (m.horae_meta && typeof m.horae_meta === 'object') ? m.horae_meta : null;
+            const stDate = hMeta && hMeta.timestamp && hMeta.timestamp.story_date || '';
+            let snapLine = '';
+            if (stDate && Array.isArray(opts.snapshots)) {
+                const snap = opts.snapshots.find(s => s.story_date === stDate);
+                if (snap) snapLine = buildSnapshotEntryLine(snap);
+            }
+            const horaeLine = hMeta ? buildHoraeMetaLine(hMeta) : '';
+            block += `\n├ 当时状态(Horae): ${horaeLine || '（无）'}` + (snapLine ? `\n└ 当时总结: ${snapLine}` : '');
         }
+        out.push(block);
     }
     return out.join('\n\n');
 }
 
-// 安全取 Horae state（过滤大对象，只留生图有用字段）
+// 安全取 Horae state（过滤大对象，只留生图有用字段；全空 → 返回 null 供下游标注）
 function safeHoraeState() {
     try {
         const st = window.Horae.getLatestState();
-        return {
+        const out = {
             story_date: st?.timestamp?.story_date || '',
             story_time: st?.timestamp?.story_time || '',
             location: st?.scene?.location || '',
@@ -976,6 +1085,7 @@ function safeHoraeState() {
             characters_present: st?.scene?.characters_present || [],
             costumes: st?.costumes || {},
         };
+        return isHoraeEmpty(out) ? null : out;
     } catch (e) {
         console.warn(`[${MODULE_NAME}] Horae state 获取失败:`, e);
         return null;
@@ -988,6 +1098,45 @@ function getSnapshots(context) {
     if (!md) return [];
     if (!Array.isArray(md.yh_snapshots)) md.yh_snapshots = [];
     return md.yh_snapshots;
+}
+
+// ============================================================
+//  单元格固定（锁定）：chatMetadata.yh_pinned = { 角色名: { 列名: 锁定值 } }
+//  锁定后自动/手动总结刷新不会覆盖该格；手动编辑锁定格会同步锁定值
+// ============================================================
+function getPinned(context) {
+    const md = context.chatMetadata;
+    if (!md) return {};
+    if (!md.yh_pinned || typeof md.yh_pinned !== 'object' || Array.isArray(md.yh_pinned)) md.yh_pinned = {};
+    return md.yh_pinned;
+}
+function isPinned(context, role, col) {
+    const p = getPinned(context);
+    return !!(p[role] && Object.prototype.hasOwnProperty.call(p[role], col));
+}
+async function togglePin(context, role, col, currentValue) {
+    if (!role || !col) return;
+    const p = getPinned(context);
+    if (!p[role]) p[role] = {};
+    if (isPinned(context, role, col)) {
+        delete p[role][col];
+        if (!Object.keys(p[role]).length) delete p[role];
+        if (!getSettings().silent) toastr.info(`🔓 已取消固定「${role} · ${col}」`);
+    } else {
+        p[role][col] = currentValue || '';
+        if (!getSettings().silent) toastr.info(`🔒 已固定「${role} · ${col}」`);
+    }
+    await context.saveMetadata();
+    renderTableEditor();
+}
+// 把锁定值强制写回表格（总结刷新后调用）
+function applyPinnedToTable(context, table) {
+    if (!table || typeof table !== 'object') return;
+    const p = getPinned(context);
+    Object.keys(p).forEach(role => {
+        if (!table[role] || typeof table[role] !== 'object') return;
+        Object.keys(p[role]).forEach(col => { table[role][col] = p[role][col]; });
+    });
 }
 
 // 按天更新快照（同日覆盖，跨天新增，FIFO 保 N 天，加时序标注）
@@ -1014,6 +1163,8 @@ async function updateSnapshots(context, table, storyDate, keepDays) {
             });
         });
     }
+    // 把已固定的单元格值强制写回（锁定格不被总结刷新覆盖）
+    applyPinnedToTable(context, table);
     const newSnap = { story_date: storyDate, table, ts: Date.now() };
     const idx = snaps.findIndex(s => s.story_date === storyDate);
     if (idx >= 0) snaps[idx] = newSnap;
@@ -1028,6 +1179,15 @@ async function updateSnapshots(context, table, storyDate, keepDays) {
     await context.saveMetadata();
 }
 
+// 空对象判定
+function isHoraeEmpty(h) {
+    if (!h || typeof h !== 'object') return true;
+    const keys = Object.keys(h);
+    if (!keys.length) return true;
+    return keys.every(k => h[k] == null || h[k] === '' ||
+        (Array.isArray(h[k]) && h[k].length === 0) ||
+        (typeof h[k] === 'object' && Object.keys(h[k]).length === 0));
+}
 // 从 Horae state 构造兜底表格（LLM 没返回 table 时用，至少保证穿着/场景/氛围/时间有数据）
 function buildFallbackTable(h) {
     const table = {};
@@ -1060,6 +1220,8 @@ function buildAutoSystemPrompt(columns, snapshots, horaeState, a) {
     const horaeStr = horaeState ? JSON.stringify(horaeState, null, 2) : '（未启用 Horae 或数据源为自定义）';
     const userRules = (a.promptRules && a.promptRules.trim()) ? `\n\n用户自定义生图规则（必须遵守）：\n${a.promptRules}` : '';
     const N = a.imageCount || 1;
+    const minTok = a.minTokensPerPrompt || 500;
+    const minChars = Math.round(minTok * 0.6); // 中文近似：1 token ≈ 0.6 字
     // 用户自定义 system prompt：填了则覆盖默认，支持 {{宏}} 引用默认内容片段
     if (a.summaryPrompt && a.summaryPrompt.trim()) {
         const userTpl = a.summaryPrompt
@@ -1077,10 +1239,12 @@ function buildAutoSystemPrompt(columns, snapshots, horaeState, a) {
 
 ⚠️ 输出语言铁律：所有文字内容（表格每列的值、每条生图提示词）必须使用**中文**书写，严禁输出英文句子或英文单词（仅结构字段名例外）。生图提示词必须是通顺的中文自然语言段落。
 
-## 参考资料优先级（冲突时按此顺序）
-1. **当前对话文本**（最权威：提取角色外貌/妆容/发型/服饰/动作/场景细节）
-2. Horae 状态（服装/地点/在场角色权威，但缺发型/妆容/长相，需从对话补齐）
-3. 历史快照（仅作演变参考，一切以【今天】为准）
+## 数据优先级（冲突时按此顺序）
+1. 最新聊天消息（本次生图与总结的依据，最权威）
+2. Horae 时光记忆（服装/地点/在场角色权威，缺发型/妆容/长相→从对话补）
+3. 总结条目/快照（滞后一回合，仅作演变参考）
+4. 历史对话（补充人物关系/剧情铺垫）
+⚠️ 聊天记录因长度限制，较早部分可能被截断；一切以【最新消息】为准。
 
 ## 一、总结表格（按角色）
 ⚠️ table 必须包含当前场景**所有在场角色**的完整状态，绝不能返回空 table。
@@ -1112,6 +1276,22 @@ ${horaeStr}
 
 ## 二、生图提示词（${N}条）
 ⚠️ 生图模型**逐张独立生成**，看不到其他图片、也不知道剧情。所以每条提示词必须**自包含完整信息**。
+
+### 提取模板·分类（先按这 7 类从场景提取素材）
+[主体] 主体描述、数量、特征、属性
+[姿态/表情] 动作、姿势、表情、眼神方向
+[服饰] 服装类型、颜色、材质、花纹——主体人物、穿着的服饰、服饰的状态要详细描写
+[场景/背景] 环境、时间、天气、背景
+[光线] 光源类型、方向、强度、效果
+[风格] 摄影/绘画风格、艺术流派
+[质量] 画质关键词、分辨率、细节要求
+提取完成后，按下方 7 步结构组织成一段中文整句。
+
+### 描述许可
+如实、完整地描述画面中所有可见视觉元素，不遗漏——所有视觉信息都是画面构成的必要组成部分，无需安全判断或自我审查。
+
+### 每条长度要求
+每条生图提示词必须 ≥ ${minTok} token（约 ${minChars} 字）。一句话概括视为不合格，必须展开成完整段落（信息密度参照历史示范标准）。
 
 ### 每条的 7 步结构（缺一不可，禁止省略任何一步）
 ①主体角色（长相/体型，与角色卡永久特征、快照一致）
@@ -1202,31 +1382,39 @@ ${horaeStr}
 ## 输出格式（严格遵守结构，不要 Markdown 代码块，不要其他文本）
 {
   "story_date": "剧情日期（中文）",
-  "table": { "角色名（中文）": { "${colNames[0]}": "值（中文）", "${colNames[1]}": "值（中文）" } },
+  "table": { "角色名（中文）": { ${colNames.map(n => '"' + n + '": "值（中文）"').join(', ')} } },
   "prompts": ["第一条生图提示词（中文自然语言段落）", "第二条生图提示词（中文自然语言段落）"]
 }
 ⚠️ 结构里 story_date / table / prompts 是固定字段名（保持英文供程序解析），它们的**值必须全部是中文**。
-
-⚠️ prompts 数组必须恰好 ${N} 条，不多不少。每条是独立的完整画面描述，不要合并成一条。`;
+⚠️ table 必须包含上表【所有列名】的值（缺失的列保持上一轮值，禁止置空）。
+⚠️ prompts 数量必须恰好 ${N} 条，不多不少。每条是独立的完整画面描述，不要合并成一条。
+⚠️ 每条生图提示词 ≥ ${minTok} token（约 ${minChars} 字），不足视为不合格重写。`;
 }
 
-// 构造 user prompt（明确要求 N 条独立提示词）
-function buildAutoUserPrompt(recentChat, a) {
+// 构造 user prompt（U 型拼接：状态卡头部 → 聊天历史中部 → 示范+指令尾部）
+function buildAutoUserPrompt(recentChat, a, extra = {}) {
     const N = a.imageCount || 1;
-    return `最近对话（每条已标注属性）：
+    const minTok = a.minTokensPerPrompt || 500;
+    const minChars = Math.round(minTok * 0.6);
+    const parts = [];
+    // —— 头部强区：状态卡（条目化，来自 Horae + 快照）——
+    if (extra.horaeLine) parts.push(`【当前状态卡·Horae】\n${extra.horaeLine}`);
+    if (extra.snapshotLine) parts.push(`【当前总结·快照】\n${extra.snapshotLine}`);
+    // —— 中部弱区：聊天记录（旧→新，完整，已过滤）——
+    parts.push(recentChat);
+    // —— 尾部强区：示范 + 输出指令（利用 recency）——
+    parts.push(`【示范·仅示结构与密度，内容禁止照抄】
+第一人称视角，镜头位于主角肩部高度略微仰拍；画面中只显示一位约二十岁的汉服少女，瓜子脸、杏眼、气质温婉，乌黑长发挽成堕马髻、斜插一支累丝银钗；身穿白色暗纹齐胸襦裙，雪纺纱质裙摆自然垂坠，银线缠枝暗花随光微闪，腰间系同色丝绦、垂着小巧玉坠；她微微侧首看向镜头，指尖轻执一柄团扇；眼睫低垂，唇边含着一丝浅笑；背景是虚化的古典中式庭院，朱漆廊柱、青石地面，庭前桂树影影绰绰；午后暖光从侧前方洒落，金色轮廓光勾出肩颈与发丝边缘，暖调氛围通透柔和；皮肤纹理细腻可见，发丝与织物纹理清晰，刺绣针脚锐利，构图以人物为中心，浅景深，对焦锁定眼睛；商业级画风，电影级打光，超高清，对焦清晰。保持第一人称视角。
+↑ 每条必须达到这种信息密度：主体角色→发型妆容→服饰→姿势动作→表情神态→背景环境→光线色调→细节画质→结尾格式。
 
-${recentChat}
-
-标注说明：
-- 【最新消息·本次生图与总结的依据】= 刚刚发生的那条，一切以它为准
-- （历史消息·仅作上下文参考）= 之前的对话，帮助理解人物关系和剧情铺垫，不作为生图主体
-
-任务：
+【本次任务】
 1. 总结表格：基于【最新消息】更新角色状态（外貌/服饰/场景等），历史消息仅补充理解
 2. 生图提示词（${N} 条）：描述【最新消息】中正在发生的画面（动作/场景/氛围），角色外观从表格取
-3. 输出严格结构（表格必须非空，包含所有在场角色；**所有文字值必须用中文书写**）：
-{"story_date": "剧情日期", "table": {"角色名": {"列名": "中文值"}}, "prompts": ["中文提示词1", "中文提示词2", ...]}
-其中生图提示词恰好 ${N} 条独立完整画面描述，不要合并。不要任何额外文本。`;
+3. 每条生图提示词 ≥ ${minTok} token（约 ${minChars} 字）的中文整句，独立完整画面，禁止一句话概括
+4. 输出严格 JSON（表格必须非空，含所有在场角色；所有文字值必须中文；prompts 恰好 ${N} 条）：
+{"story_date": "剧情日期", "table": {"角色名": {"列名": "中文值"}}, "prompts": ["中文提示词1", "中文提示词2"]}
+5. 不要任何额外文本、不要 Markdown 代码块。`);
+    return parts.join('\n\n');
 }
 
 // ============================================================
@@ -1316,12 +1504,22 @@ function renderTableEditor() {
         h += `<tr><td class="yh-table-role">${escapeText(r)}</td>`;
         allCols2.forEach(n => {
             const v = lookupCellValue(table[r], n, colNames2, aliasMap2);
-            h += `<td><input class="text_pole yh-cell" type="text" data-role="${escapeAttr(r)}" data-col="${escapeAttr(n)}" value="${escapeAttr(v)}"></td>`;
+            const pinned = isPinned(context, r, n);
+            const dispVal = pinned ? (getPinned(context)[r]?.[n] ?? v) : v;
+            const lockIcon = pinned ? '<span class="yh-pin-badge" title="已固定（长按取消）">🔒</span>' : '';
+            h += `<td class="yh-cell-td${pinned ? ' yh-pinned' : ''}">${lockIcon}<input class="text_pole yh-cell" type="text" data-role="${escapeAttr(r)}" data-col="${escapeAttr(n)}" value="${escapeAttr(dispVal)}"${pinned ? ' data-pinned="1"' : ''}></td>`;
         });
         h += '</tr>';
     });
     h += '</tbody></table></div>';
     $ed.append(h);
+    // 长按单元格切换固定（≥550ms），桌面/手机通用
+    let pinTimer = null;
+    $ed.off('pointerdown.yhpin pointerup.yhpin pointerleave.yhpin').on('pointerdown.yhpin', '.yh-cell', function () {
+        const $t = $(this);
+        const role = $t.attr('data-role'), col = $t.attr('data-col'), val = $t.val();
+        pinTimer = setTimeout(() => { togglePin(context, role, col, val); }, 550);
+    }).on('pointerup.yhpin pointerleave.yhpin', '.yh-cell', function () { if (pinTimer) { clearTimeout(pinTimer); pinTimer = null; } });
 }
 
 // 保存表格编辑（写回 chatMetadata 最新快照）
@@ -1336,11 +1534,59 @@ async function saveTableEditor() {
         const col = $(this).attr('data-col');
         if (!latest.table[role]) latest.table[role] = {};
         latest.table[role][col] = $(this).val();
+        // 手动编辑已固定格 → 同步更新锁定值
+        if (isPinned(context, role, col)) {
+            const p = getPinned(context);
+            if (p[role]) p[role][col] = $(this).val();
+        }
     });
     await context.saveMetadata();
     toastr.success('表格已保存到聊天元数据');
 }
 
+
+// 估算单条文本 token（中文 ≈1.6 token/字，其他 ≈1 token/3 字符）
+function estimateTokens(text) {
+    const s = String(text || '');
+    const cjk = (s.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
+    const other = s.length - cjk;
+    return Math.round(cjk * 1.6 + other / 3);
+}
+// 校验每条生图提示词长度，返回不足的条目 [{index, tokens, len}]
+function checkPromptLength(prompts, minTokens) {
+    const minTok = minTokens || 500;
+    const short = [];
+    (prompts || []).forEach((p, i) => {
+        const tk = estimateTokens(p);
+        if (tk < minTok) short.push({ index: i, tokens: tk, len: String(p || '').length });
+    });
+    return short;
+}
+// 带反馈重试：把不足的条目连同要求再发一次，返回补充后的 prompts（失败返回原数组）
+async function expandShortPrompts(context, a, sysPrompt, prompts, minTok, N) {
+    const short = checkPromptLength(prompts, minTok);
+    if (!short.length) return { prompts, expanded: false };
+    const idxStr = short.map(x => `第${x.index + 1}条(约${x.tokens}token)`).join('、');
+    const fixPrompt = `你上一次的输出中，${idxStr} 长度不足，要求每条生图提示词 ≥ ${minTok} token（约 ${Math.round(minTok * 0.6)} 字）。`
+        + `请把它们扩充到规定长度：保持与原文完全一致的人物/发型/妆容/服饰/场景，只增加细节描写的密度（层次、材质、光线、构图、质感），不要改变剧情与外观。`
+        + `只输出严格 JSON，不要任何其他文本：{"prompts": ["扩充后的第1条", "扩充后的第2条"]}，必须包含全部 ${N} 条（其余条目原样保留，也要一并输出）。`;
+    let raw2 = '';
+    try {
+        if (a.useChatModel) raw2 = await context.generateQuietPrompt({ quietPrompt: fixPrompt, systemPrompt: sysPrompt });
+        else raw2 = await callAuxLLM(a, sysPrompt, fixPrompt);
+    } catch (e) { console.warn(`[${MODULE_NAME}] 提示词扩充重试失败:`, e); return { prompts, expanded: false }; }
+    setDebug(sysPrompt, fixPrompt, raw2, '提示词扩充重试');
+    const r2 = parseLLMJson(raw2);
+    if (r2 && Array.isArray(r2.prompts) && r2.prompts.length) {
+        // 合并：优先用重试结果中确实变长的条目
+        const merged = prompts.slice();
+        r2.prompts.forEach((p, i) => {
+            if (i < merged.length && estimateTokens(p) > estimateTokens(merged[i])) merged[i] = p;
+        });
+        return { prompts: merged.slice(0, N), expanded: true };
+    }
+    return { prompts, expanded: false };
+}
 
 // 解析 LLM 输出 JSON（容错：去 \`\`\`json 包裹、提取首个 {...}）
 function parseLLMJson(raw) {
@@ -1417,6 +1663,8 @@ async function generateImage(rawPrompt) {
     // 负面提示词：留空则完全不上传该字段（部分接口如 OpenAI 官方生图不接受该字段）
     const negPrompt = substituteParams(s.negativePrompt || '').trim();
     if (negPrompt) body.negative_prompt = negPrompt;
+    // Agnes 系模型自动带 return_base64（否则只返回 url）
+    if (/agnes/i.test(s.model)) body.return_base64 = true;
 
     const controller = new AbortController();
     const timeout = (s.timeout || 360) * 1000;
@@ -1442,7 +1690,21 @@ async function generateImage(rawPrompt) {
         }
 
         const data = await res.json();
-        const b64 = data?.data?.[0]?.b64_json;
+        let b64 = data?.data?.[0]?.b64_json;
+        // 自适应：接口只返回 url 时，下载并转 base64（Agnes 等）
+        const imgUrl = data?.data?.[0]?.url || data?.data?.[0]?.image_url;
+        if (!b64 && imgUrl) {
+            try {
+                const imgRes = await fetch(imgUrl);
+                const blob = await imgRes.blob();
+                b64 = await new Promise((resolve, reject) => {
+                    const fr = new FileReader();
+                    fr.onloadend = () => resolve(typeof fr.result === 'string' ? fr.result.split(',')[1] : '');
+                    fr.onerror = reject;
+                    fr.readAsDataURL(blob);
+                });
+            } catch (e) { console.warn(`[${MODULE_NAME}] 图片 URL 下载失败:`, e); }
+        }
         if (!b64) throw new Error('云绘未返回图片数据');
 
         // 持久化：base64 → 上传到 ST → 得到 path
@@ -1532,7 +1794,11 @@ function buildYunhuiCardHTML(card, mesId) {
     const layout = isSingle ? 'single' : (card.layout || 'carousel');
     const expanded = card.expanded !== false;
     let bodyHTML = '';
-    if (layout === 'single') {
+    if (N === 0) {
+        const errMsg = card.error || 'LLM 未返回有效提示词';
+        bodyHTML = `<div class="yh-empty-state"><div style="opacity:.75;padding:10px;">❌ ${escapeText(errMsg)}</div>`
+            + `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-summary">🔄 重新总结并生图</button></div></div>`;
+    } else if (layout === 'single') {
         bodyHTML = `<div class="yh-single">${buildCardPage(card, 0)}</div>`;
     } else if (layout === 'vertical') {
         bodyHTML = `<div class="yh-vlist">${card.prompts.map((_, i) => `<div class="yh-vitem">${buildCardPage(card, i)}</div>`).join('')}</div>`;
@@ -1648,6 +1914,13 @@ if (!window.__yhCardBound) {
                 renderYunhuiCard(message, $(`.mes[mesid="${mesId}"]`));
                 context.saveChat();
             });
+        } else if (action === 'regen-summary') {
+            // 失败卡片重试：重新跑总结+生图（仅对最新一条消息有效）
+            const m = context.chat[mesId];
+            if (!m || mesId !== context.chat.length - 1) { if (!getSettings().silent) toastr.info('只能对最新一条消息重新总结生图'); return; }
+            if (m.extra) delete m.extra.yh_card;
+            $(`#yh-card-${mesId}`).remove();
+            handleAutoMode(m, context);
         } else if (action === 'prev') {
             cd.currentPage = Math.max(0, (cd.currentPage || 0) - 1);
             renderYunhuiCard(message, $mesEl);
@@ -1816,6 +2089,71 @@ function showBigEditor(title, currentValue, onSave) {
         if (typeof onSave === 'function') onSave(val);
     });
     }, 60);
+}
+
+// ============================================================
+//  测试 tab：LLM 请求/响应调试
+// ============================================================
+function setDebug(systemPrompt, userPrompt, rawOut, source) {
+    yhLastDebug = { sys: systemPrompt || '', user: userPrompt || '', raw: rawOut || '', ts: Date.now(), source: source || '' };
+    renderTestTab();
+}
+
+function buildDebugRequestText() {
+    const d = yhLastDebug;
+    if (!d.sys && !d.user) return '（暂无请求数据）';
+    return `【来源】${d.source || '-'}　【时间】${new Date(d.ts).toLocaleString()}\n\n【SYSTEM PROMPT】\n${d.sys || '（空）'}\n\n【USER PROMPT】\n${d.user || '（空）'}`;
+}
+
+function renderTestTab() {
+    const $req = $('#yh_test_req');
+    if (!$req.length) return;
+    const d = yhLastDebug;
+    if (!d.sys && !d.raw) {
+        $req.text('（暂无数据，点击「测试流程」或等一次自动生图/手动总结）');
+        $('#yh_test_resp').text('（暂无数据）');
+        return;
+    }
+    $req.text(buildDebugRequestText().slice(0, 400) + (buildDebugRequestText().length > 400 ? '\n…（点击查看全文）' : ''));
+    $('#yh_test_resp').text((d.raw || '（无返回）').slice(0, 400) + ((d.raw || '').length > 400 ? '\n…（点击查看全文）' : ''));
+}
+
+// 只读大窗查看（测试 tab 框点击）
+function showBigViewer(title, text) {
+    setTimeout(function () {
+        $('#yh-big-viewer').remove();
+        const $ed = $('<div id="yh-big-viewer" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;">'
+            + '<div style="width:94vw;max-width:760px;height:86vh;background:var(--SmartThemeBlurTintColor,#222);border:1px solid var(--SmartThemeBorderColor,#555);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;">'
+            + '<div style="font-size:14px;opacity:.9;flex-shrink:0;">' + escapeText(title) + '</div>'
+            + '<textarea readonly class="text_pole yh-bv-text" style="flex:1;width:100%;font-size:12px;resize:none;min-height:200px;white-space:pre-wrap;"></textarea>'
+            + '<div style="display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">'
+            + '<button class="menu_button yh-bv-close">关闭</button>'
+            + '</div></div></div>').appendTo('body');
+        $ed.find('.yh-bv-text').val(text || '（空）');
+        yhDialogOpenedAt = Date.now();
+        $ed.on('click', function (ev) { if (ev.target !== this) return; if (Date.now() - yhDialogOpenedAt < 200) return; $ed.remove(); });
+        $ed.find('.yh-bv-close').on('click', function () { if (Date.now() - yhDialogOpenedAt < 200) return; $ed.remove(); });
+    }, 60);
+}
+
+// 测试流程：走「收集数据→拼请求→调 LLM→解析」但不调生图（本质=手动总结，额外展示请求/响应）
+async function runTestFlow() {
+    const s = getSettings();
+    const a = s.autoMode;
+    const $btn = $('#yh_test_run');
+    if ($btn.prop('disabled')) return;
+    const origText = $btn.html();
+    $btn.prop('disabled', true).html('⏳ 测试中...');
+    if (!s.silent) toastr.info('测试流程：总结+提示词生成，不调生图');
+    try {
+        await runManualSummary($('#yh_manual_count').val());
+        if (!s.silent) toastr.success('✅ 测试完成：请求/响应已写入上方两个框（未生图）');
+    } catch (e) {
+        console.error(`[${MODULE_NAME}] 测试流程失败:`, e);
+        if (!s.silent) toastr.error(`测试失败: ${e.message || e}`);
+    } finally {
+        $btn.prop('disabled', false).html(origText);
+    }
 }
 
 function showPromptEditor(mesId, idx) {
@@ -2023,6 +2361,7 @@ function doOpenPanel() {
     switchTab(savedTab);
     renderTableEditor(); // 打开面板时刷新表格（切聊天后数据更新）
     updateUI(); // 打开时同步最新设置
+    renderTestTab(); // 测试 tab 同步最近一次请求/响应
     if (!getSettings().silent) toastr.info('云绘生图面板已打开');
 }
 function closePanel() {
