@@ -1936,7 +1936,7 @@ if (!window.__yhCardBound) {
         } else if (action === 'regen-summary') {
             // 失败卡片重试：重新跑总结+生图（仅对最新一条消息有效）
             const m = context.chat[mesId];
-            if (!m || mesId !== context.chat.length - 1) { if (!getSettings().silent) toastr.info('只能对最新一条消息重新总结生图'); return; }
+            if (!m || Number(mesId) !== context.chat.length - 1) { if (!getSettings().silent) toastr.info('只能对最新一条消息重新总结生图'); return; }
             if (m.extra) delete m.extra.yh_card;
             $(`#yh-card-${mesId}`).remove();
             handleAutoMode(m, context);
