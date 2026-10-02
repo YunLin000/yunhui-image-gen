@@ -999,7 +999,7 @@ async function applyRegexFilter(text) {
     if (!eng || typeof eng.getRegexedString !== 'function') return text;
     try {
         const placement = (eng.regex_placement && eng.regex_placement.AI_OUTPUT !== undefined) ? eng.regex_placement.AI_OUTPUT : 2;
-        return eng.getRegexedString(String(text), { placement }, { isPrompt: true });
+        return eng.getRegexedString(String(text), placement, { isPrompt: true });
     } catch (e) { return text; }
 }
 // 剥 HTML 标签 + 思考内容（部分后端把 reasoning 写进正文；先剥思考块再剥其他标签，否则标签被先吃掉内容会留下）
