@@ -944,18 +944,10 @@ async function handleAutoMode(message, context) {
                 if (!s.silent) toastr.warning('LLM 未返回总结表格（表格区将为空）');
             }
 
-            // 6. 提示词长度校验 + 扩充重试
+            // 6. 先渲染卡片（generating 状态）——不因后续扩充/生图卡住而消失
             const N = Math.min(result.prompts.length, a.imageCount || 1);
             let prompts = result.prompts.slice(0, N);
             const minTok = a.minTokensPerPrompt || 500;
-            if (checkPromptLength(prompts, minTok).length) {
-                if (!s.silent) toastr.info(`有 ${checkPromptLength(prompts, minTok).length} 条提示词不足 ${minTok} token，正在扩充...`);
-                const ex = await expandShortPrompts(context, a, sysPrompt, prompts, minTok, N);
-                prompts = ex.prompts;
-            }
-            const shortFinal = checkPromptLength(prompts, minTok);
-            const promptWarn = shortFinal.length ? `（${shortFinal.length} 条仍未达 ${minTok} token）` : '';
-            // 7. 逐个生图 + 卡片展示（替代 ST 原生 swipe，用折叠卡片）
             if (!message.extra) message.extra = {};
             message.extra.yh_card = {
                 prompts: prompts.slice(),
@@ -967,6 +959,17 @@ async function handleAutoMode(message, context) {
             };
             renderYunhuiCard(message, msgEl);
             if (!s.silent) toastr.info(`自动生图 ${N} 张中...`);
+            // 7. 长度校验 + 扩充重试（超时保护；扩充后更新卡片 prompts）
+            if (checkPromptLength(prompts, minTok).length) {
+                if (!s.silent) toastr.info(`有 ${checkPromptLength(prompts, minTok).length} 条提示词不足 ${minTok} token，正在扩充...`);
+                const ex = await expandShortPrompts(context, a, sysPrompt, prompts, minTok, N);
+                prompts = ex.prompts;
+                message.extra.yh_card.prompts = prompts.slice();
+                renderYunhuiCard(message, msgEl);
+            }
+            const shortFinal = checkPromptLength(prompts, minTok);
+            const promptWarn = shortFinal.length ? `（${shortFinal.length} 条仍未达 ${minTok} token）` : '';
+            // 8. 逐个生图
             for (let i = 0; i < N; i++) {
                 if (getCurrentChatId() !== currentChatId) break;
                 const url = await generateImage(prompts[i]);
@@ -1591,9 +1594,14 @@ async function expandShortPrompts(context, a, sysPrompt, prompts, minTok, N) {
         + `只输出严格 JSON，不要任何其他文本：{"prompts": ["扩充后的第1条", "扩充后的第2条"]}，必须包含全部 ${N} 条（其余条目原样保留，也要一并输出）。`;
     let raw2 = '';
     try {
-        if (a.useChatModel) raw2 = await context.generateQuietPrompt({ quietPrompt: fixPrompt, systemPrompt: sysPrompt });
-        else raw2 = await callAuxLLM(a, sysPrompt, fixPrompt);
-    } catch (e) { console.warn(`[${MODULE_NAME}] 提示词扩充重试失败:`, e); return { prompts, expanded: false }; }
+        const call = (a.useChatModel)
+            ? context.generateQuietPrompt({ quietPrompt: fixPrompt, systemPrompt: sysPrompt })
+            : callAuxLLM(a, sysPrompt, fixPrompt);
+        raw2 = await Promise.race([
+            Promise.resolve(call),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('提示词扩充超时(45s)')), 45000)),
+        ]);
+    } catch (e) { console.warn(`[${MODULE_NAME}] 提示词扩充重试失败/超时，用原提示词继续生图:`, e.message); return { prompts, expanded: false }; }
     setDebug(sysPrompt, fixPrompt, raw2, '提示词扩充重试');
     const r2 = parseLLMJson(raw2);
     if (r2 && Array.isArray(r2.prompts) && r2.prompts.length) {
@@ -1801,10 +1809,12 @@ function renderYunhuiCard(message, msgEl) {
 
 function buildYunhuiCardHTML(card, mesId) {
     const N = card.prompts.length;
+    const regen = card.status && card.status[0] === 'regen';   // 重新总结中（占位态，等 handleAutoMode 渲染新卡）
     const done = card.status.filter(st => st === 'done').length;
     const failed = card.status.filter(st => st === 'failed').length;
     let statusText;
-    if (N === 0) statusText = '—';
+    if (regen) statusText = '🔄 总结中';
+    else if (N === 0) statusText = '—';
     else if (done === N) statusText = '✅完成';
     else if (failed > 0 && done === 0) statusText = `❌失败 ${failed}/${N}`;
     else if (failed > 0) statusText = `⚠️ ${done}/${N}`;
@@ -1813,7 +1823,9 @@ function buildYunhuiCardHTML(card, mesId) {
     const layout = isSingle ? 'single' : (card.layout || 'carousel');
     const expanded = card.expanded !== false;
     let bodyHTML = '';
-    if (N === 0) {
+    if (regen) {
+        bodyHTML = `<div class="yh-empty-state"><div style="opacity:.75;padding:14px;">🔄 正在重新总结并生图…（完成自动更新本卡片）</div></div>`;
+    } else if (N === 0) {
         const errMsg = card.error || 'LLM 未返回有效提示词';
         bodyHTML = `<div class="yh-empty-state"><div style="opacity:.75;padding:10px;">❌ ${escapeText(errMsg)}</div>`
             + `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-summary">🔄 重新总结并生图</button></div></div>`;
@@ -1937,8 +1949,13 @@ if (!window.__yhCardBound) {
             // 失败卡片重试：重新跑总结+生图（仅对最新一条消息有效）
             const m = context.chat[mesId];
             if (!m || Number(mesId) !== context.chat.length - 1) { if (!getSettings().silent) toastr.info('只能对最新一条消息重新总结生图'); return; }
-            if (m.extra) delete m.extra.yh_card;
-            $(`#yh-card-${mesId}`).remove();
+            // 不删卡片——改为显示「重新总结中」占位，handleAutoMode 完成后会覆盖为正常卡（generating→图）
+            if (!m.extra) m.extra = {};
+            m.extra.yh_card = {
+                prompts: [], images: [], status: ['regen'],
+                expanded: true, layout: (getSettings().autoMode?.cardLayout) || 'carousel', currentPage: 0,
+            };
+            renderYunhuiCard(m, $(`.mes[mesid="${mesId}"]`));
             handleAutoMode(m, context);
         } else if (action === 'prev') {
             cd.currentPage = Math.max(0, (cd.currentPage || 0) - 1);
