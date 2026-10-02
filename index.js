@@ -74,6 +74,7 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
         auxModels: [],             // 辅助模型列表（持久化，回显用）
         historyCount: 10,          // 上传给辅助 LLM 的最近聊天记录条数（完整上传不截断）
         minTokensPerPrompt: 500,    // 每条生图提示词最小 token 数（不足带反馈重试一次，仍不足则报错不送生图）
+        roleNameMode: 'ai',         // ai=AI消息统一标「AI」（默认，避免超级卡卡名与卡内角色混淆） | card=显示角色卡名 | none=不标
         manualCount: 30,           // 手动总结时取的对话条数（持久化记忆）
         customColumns: [           // 总结表格列定义（可自定义，贯穿提示词/UI/快照）
             { name: '发型', rule: '' },
@@ -172,6 +173,7 @@ function updateUI() {
     set('yh_auto_count', a.imageCount);
     set('yh_auto_history', a.historyCount);
     set('yh_auto_min_tokens', a.minTokensPerPrompt);
+    set('yh_auto_role_name', a.roleNameMode);
     set('yh_manual_count', a.manualCount || 30);
     check('yh_auto_save_mode', a.saveMode);
     check('yh_card_expanded', a.cardExpanded);
@@ -308,6 +310,7 @@ function bindEvents() {
     persistA('yh_auto_count', 'imageCount', false, true);
     persistA('yh_auto_history', 'historyCount', false, true);
     persistA('yh_auto_min_tokens', 'minTokensPerPrompt', false, true);
+    persistA('yh_auto_role_name', 'roleNameMode');
     persistA('yh_auto_save_mode', 'saveMode', true);
     persistA('yh_card_expanded', 'cardExpanded', true);
     persistA('yh_card_layout', 'cardLayout');
@@ -830,7 +833,7 @@ async function runManualSummary(count) {
         const snapshots = getSnapshots(context);
         const horaeState = (a.source !== 'custom' && typeof window.Horae?.getLatestState === 'function') ? safeHoraeState() : null;
         const grouped = (a.source === 'snapshot');
-        const recentChat = await getRecentMessages(context.chat, n, { useRegex: true, grouped, snapshots });
+        const recentChat = await getRecentMessages(context.chat, n, { useRegex: true, grouped, snapshots, roleNameMode: a.roleNameMode });
         const cols = (a.customColumns?.length ? a.customColumns : YH_DEFAULT_COLUMNS.map(nm => ({ name: nm })));
         const sysPrompt = buildAutoSystemPrompt(cols, snapshots, horaeState, a);
         const userPrompt = buildAutoUserPrompt(recentChat, a, {
@@ -884,7 +887,7 @@ async function handleAutoMode(message, context) {
             const snapshots = getSnapshots(context);
             const horaeState = (a.source !== 'custom' && typeof window.Horae?.getLatestState === 'function') ? safeHoraeState() : null;
             const grouped = (a.source === 'snapshot');
-            const recentChat = await getRecentMessages(context.chat, a.historyCount || 10, { useRegex: true, grouped, snapshots });
+            const recentChat = await getRecentMessages(context.chat, a.historyCount || 10, { useRegex: true, grouped, snapshots, roleNameMode: a.roleNameMode });
 
             // 2. 构造 prompt
             const sysPrompt = buildAutoSystemPrompt((a.customColumns?.length ? a.customColumns : YH_DEFAULT_COLUMNS.map(n => ({ name: n }))), snapshots, horaeState, a);
@@ -1046,16 +1049,23 @@ function buildHoraeMetaLine(h) {
 async function getRecentMessages(chat, n, opts = {}) {
     const start = Math.max(0, chat.length - n);
     const out = [];
+    const roleMode = opts.roleNameMode || 'ai';
     for (let i = start; i < chat.length; i++) {
         const m = chat[i];
         if (!m || !m.mes) continue;
-        const name = m.is_user ? '用户' : (m.name || m.send_as || 'AI');
+        // 角色名标注：用户消息用 Persona 名（m.name）；AI 消息按 roleNameMode
+        let name;
+        if (m.is_user) name = (m.name && m.name !== '用户') ? m.name : '用户';
+        else if (roleMode === 'none') name = '';
+        else if (roleMode === 'card') name = `【角色卡·${m.name || 'AI'}】`;
+        else name = 'AI';
         let text = stripChatText(m.mes);
         if (opts.useRegex) text = await applyRegexFilter(text);
         const isLast = (i === chat.length - 1);
+        const namePart = name ? `${name}: ` : '';
         let block = isLast
-            ? `【最新消息·本次生图与总结的依据】\n${name}: ${text}`
-            : `（历史·第${i - start + 1}条·仅供参考）${name}: ${text}`;
+            ? `【最新消息·本次生图与总结的依据】\n${namePart}${text}`
+            : `（历史·第${i - start + 1}条·仅供参考）${namePart}${text}`;
         // 分组模式：每条消息后附当时 Horae 状态 + 当天快照条目
         if (opts.grouped) {
             const hMeta = (m.horae_meta && typeof m.horae_meta === 'object') ? m.horae_meta : null;
@@ -1245,6 +1255,7 @@ function buildAutoSystemPrompt(columns, snapshots, horaeState, a) {
 3. 总结条目/快照（滞后一回合，仅作演变参考）
 4. 历史对话（补充人物关系/剧情铺垫）
 ⚠️ 聊天记录因长度限制，较早部分可能被截断；一切以【最新消息】为准。
+⚠️ 聊天记录标注说明：标注为「AI」的消息是角色扮演输出（角色卡名不代表说话人）；正文中出现的角色名才是实际说话人——总结表格与生图提示词以正文中的角色名为准。
 
 ## 一、总结表格（按角色）
 ⚠️ table 必须包含当前场景**所有在场角色**的完整状态，绝不能返回空 table。
@@ -1407,9 +1418,17 @@ function buildAutoUserPrompt(recentChat, a, extra = {}) {
 第一人称视角，镜头位于主角肩部高度略微仰拍；画面中只显示一位约二十岁的汉服少女，瓜子脸、杏眼、气质温婉，乌黑长发挽成堕马髻、斜插一支累丝银钗；身穿白色暗纹齐胸襦裙，雪纺纱质裙摆自然垂坠，银线缠枝暗花随光微闪，腰间系同色丝绦、垂着小巧玉坠；她微微侧首看向镜头，指尖轻执一柄团扇；眼睫低垂，唇边含着一丝浅笑；背景是虚化的古典中式庭院，朱漆廊柱、青石地面，庭前桂树影影绰绰；午后暖光从侧前方洒落，金色轮廓光勾出肩颈与发丝边缘，暖调氛围通透柔和；皮肤纹理细腻可见，发丝与织物纹理清晰，刺绣针脚锐利，构图以人物为中心，浅景深，对焦锁定眼睛；商业级画风，电影级打光，超高清，对焦清晰。保持第一人称视角。
 ↑ 每条必须达到这种信息密度：主体角色→发型妆容→服饰→姿势动作→表情神态→背景环境→光线色调→细节画质→结尾格式。
 
+【输出前推演】（在心中按序完成，思考内容不要输出，只给最终 JSON）
+S1 盘点：当前场景所有在场角色是谁？快照里的对应角色是谁？
+S2 变化：对照上方【一、总结表格】的更新规则，判断最新消息里谁的外貌/服饰/场景/氛围变了、谁没变
+S3 提取：按【二、生图提示词】的【分类提取模板】7 类，从最新消息提取每个角色的视觉素材
+S4 组织：每条生图提示词按【7 步结构】展开，含【描写范围=出图范围】【可见性铁律】【第一人称视角】【姿态-服饰联动】，达到 ≥ ${minTok} token 信息密度
+S5 自检：过【一致性自检】清单 + 长度检查 + 全列全中文
+推演完成后，只输出最终 JSON。
+
 【本次任务】
-1. 总结表格：基于【最新消息】更新角色状态（外貌/服饰/场景等），历史消息仅补充理解
-2. 生图提示词（${N} 条）：描述【最新消息】中正在发生的画面（动作/场景/氛围），角色外观从表格取
+1. 总结表格：基于【最新消息】更新角色状态，**严格遵循上方【一、总结表格】的列定义/填写要求/更新规则**，历史消息仅补充理解
+2. 生图提示词（${N} 条）：**严格遵循上方【二、生图提示词】全部规则**（分类提取模板→7步结构→描述许可→元素三层→姿势-服饰联动→描写范围→可见性铁律→第一人称→画质风格→多张分配→一致性自检），描述【最新消息】中正在发生的画面，角色外观从表格取
 3. 每条生图提示词 ≥ ${minTok} token（约 ${minChars} 字）的中文整句，独立完整画面，禁止一句话概括
 4. 输出严格 JSON（表格必须非空，含所有在场角色；所有文字值必须中文；prompts 恰好 ${N} 条）：
 {"story_date": "剧情日期", "table": {"角色名": {"列名": "中文值"}}, "prompts": ["中文提示词1", "中文提示词2"]}
