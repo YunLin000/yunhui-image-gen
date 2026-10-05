@@ -7,7 +7,7 @@
   "js": "index.js",
   "css": "style.css",
   "author": "MOMO",
-  "version": "2.2.9",
+  "version": "2.2.10",
   "homePage": "",
   "auto_update": false,
   "minimum_client_version": "1.12.0",

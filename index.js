@@ -2234,7 +2234,7 @@ function buildYunhuiCardHTML(card, mesId) {
     let statusText;
     if (regen) statusText = '🔄 总结中';
     else if (N === 0) statusText = '—';
-    else if (done === N) statusText = '✅完成';
+    else if (done === N) statusText = '完成';
     else if (failed > 0 && done === 0) statusText = `❌失败 ${failed}/${N}`;
     else if (failed > 0) statusText = `⚠️ ${done}/${N}`;
     else statusText = `⏳ ${done}/${N}`;
@@ -2247,15 +2247,15 @@ function buildYunhuiCardHTML(card, mesId) {
     } else if (N === 0) {
         const errMsg = card.error || 'LLM 未返回有效提示词';
         bodyHTML = `<div class="yh-empty-state"><div style="opacity:.75;padding:10px;">❌ ${escapeText(errMsg)}</div>`
-            + `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-summary">🔄 重新总结并生图</button></div></div>`;
+            + `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-summary"><i class="fa-solid fa-rotate-right"></i> 重新总结并生图</button></div></div>`;
     } else if (layout === 'single') {
         bodyHTML = `<div class="yh-single">${buildCardPage(card, 0)}</div>`;
     } else if (layout === 'vertical') {
         bodyHTML = `<div class="yh-vlist">${card.prompts.map((_, i) => `<div class="yh-vitem">${buildCardPage(card, i)}</div>`).join('')}</div>`;
-        bodyHTML += `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-all">🔄 重抽全部</button></div>`;
+        bodyHTML += `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-all"><i class="fa-solid fa-rotate-right"></i> 重抽全部</button></div>`;
     } else if (layout === 'grid') {
         bodyHTML = `<div class="yh-grid">${card.prompts.map((_, i) => `<div class="yh-gitem">${buildCardPage(card, i)}</div>`).join('')}</div>`;
-        bodyHTML += `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-all">🔄 重抽全部</button></div>`;
+        bodyHTML += `<div class="yh-card-toolbar"><button class="yh-btn" data-yh-action="regen-all"><i class="fa-solid fa-rotate-right"></i> 重抽全部</button></div>`;
     } else { // carousel 左右翻页（默认）
         const cur = card.currentPage || 0;
         bodyHTML = `<div class="yh-carousel"><div class="yh-slider">${card.prompts.map((_, i) => `<div class="yh-slide${i===cur ? ' active' : ''}" data-idx="${i}">${buildCardPage(card, i, true)}</div>`).join('')}</div></div>`;
@@ -2263,10 +2263,10 @@ function buildYunhuiCardHTML(card, mesId) {
         if (N > 1) bodyHTML += `<div class="yh-dots">${card.prompts.map((_, i) => `<span class="yh-dot${i===cur ? ' active' : ''}" data-yh-action="dot" data-idx="${i}" title="第 ${i+1} 张"></span>`).join('')}</div>`;
         // 按钮排在最下方（作用于当前显示的这张；与圆点交换位置后离图片更远，不易误触）
         bodyHTML += `<div class="yh-card-toolbar yh-cur-btns">`
-            + `<button class="yh-btn" data-yh-action="regen" title="用原提示词重抽本张">🔄</button>`
-            + `<button class="yh-btn" data-yh-action="edit-prompt" title="查看/修改提示词后重抽">📝</button>`
-            + `<button class="yh-btn" data-yh-action="zoom" title="看大图">🖼️</button>`
-            + `<button class="yh-btn" data-yh-action="delete" title="删除本张">🗑️</button>`
+            + `<button class="yh-btn" data-yh-action="regen" title="用原提示词重抽本张"><i class="fa-solid fa-rotate-right"></i></button>`
+            + `<button class="yh-btn" data-yh-action="edit-prompt" title="查看/修改提示词后重抽"><i class="fa-solid fa-pen"></i></button>`
+            + `<button class="yh-btn" data-yh-action="zoom" title="看大图"><i class="fa-solid fa-magnifying-glass-plus"></i></button>`
+            + `<button class="yh-btn" data-yh-action="delete" title="删除本张"><i class="fa-solid fa-trash-can"></i></button>`
             + `</div>`;
     }
     return `<div id="yh-card-${mesId}" class="yh-card${expanded ? '' : ' collapsed'}" data-mesid="${mesId}">
@@ -2288,19 +2288,19 @@ function buildCardPage(card, i, noBtns) {
     if (status === 'done' && img) {
         return `<div class="yh-imgwrap"><img src="${escapeAttr(img)}" alt="${escapeAttr(prompt)}" data-idx="${i}" style="${cardImgStyle(w, h)}">`
             + (noBtns ? '' : `<div class="yh-imgbtns">`
-            + `<button class="yh-btn" data-yh-action="regen" data-idx="${i}" title="用原提示词重抽本张">🔄</button>`
-            + `<button class="yh-btn" data-yh-action="edit-prompt" data-idx="${i}" title="查看/修改提示词后重抽">📝</button>`
-            + `<button class="yh-btn" data-yh-action="zoom" data-idx="${i}" title="看大图">🖼️</button>`
-            + `<button class="yh-btn" data-yh-action="delete" data-idx="${i}" title="删除本张">🗑️</button>`
+            + `<button class="yh-btn" data-yh-action="regen" data-idx="${i}" title="用原提示词重抽本张"><i class="fa-solid fa-rotate-right"></i></button>`
+            + `<button class="yh-btn" data-yh-action="edit-prompt" data-idx="${i}" title="查看/修改提示词后重抽"><i class="fa-solid fa-pen"></i></button>`
+            + `<button class="yh-btn" data-yh-action="zoom" data-idx="${i}" title="看大图"><i class="fa-solid fa-magnifying-glass-plus"></i></button>`
+            + `<button class="yh-btn" data-yh-action="delete" data-idx="${i}" title="删除本张"><i class="fa-solid fa-trash-can"></i></button>`
             + `</div>`) + `</div>`;
     } else if (status === 'failed') {
         return `<div class="yh-failed" style="${cardBoxStyle(w, h)}"><div>❌ 生成失败</div>`
-            + `<div class="yh-imgbtns"><button class="yh-btn" data-yh-action="regen" data-idx="${i}">🔄 重抽</button>`
-            + `<button class="yh-btn" data-yh-action="edit-prompt" data-idx="${i}">📝 改提示词</button></div></div>`;
+             + `<div class="yh-imgbtns"><button class="yh-btn" data-yh-action="regen" data-idx="${i}"><i class="fa-solid fa-rotate-right"></i> 重抽</button>`
+            + `<button class="yh-btn" data-yh-action="edit-prompt" data-idx="${i}"><i class="fa-solid fa-pen"></i> 改提示词</button></div></div>`;
     } else if (status === 'removed') {
         return `<div class="yh-removed" style="${cardBoxStyle(w, h)}"><div class="yh-removed-tip">🗑️ 已删除，提示词保留</div>`
-            + `<div class="yh-imgbtns"><button class="yh-btn" data-yh-action="regen" data-idx="${i}">🔄 重新生成</button>`
-            + `<button class="yh-btn" data-yh-action="edit-prompt" data-idx="${i}">📝 改提示词</button></div></div>`;
+             + `<div class="yh-imgbtns"><button class="yh-btn" data-yh-action="regen" data-idx="${i}"><i class="fa-solid fa-rotate-right"></i> 重新生成</button>`
+            + `<button class="yh-btn" data-yh-action="edit-prompt" data-idx="${i}"><i class="fa-solid fa-pen"></i> 改提示词</button></div></div>`;
     }
     return `<div class="yh-loading" style="${cardBoxStyle(w, h)}">⏳ 生成中</div>`;
 }
@@ -2931,5 +2931,5 @@ jQuery(async () => {
         setTimeout(updateUI, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.9`);
+    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.10`);
 });

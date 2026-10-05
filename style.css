@@ -533,3 +533,7 @@
 .menu_button.yh-testing { opacity: 0.85; cursor: progress; }
 .menu_button.yh-test-ok i { color: #2ecc71 !important; }
 .menu_button.yh-test-fail i { color: #e74c3c !important; }
+
+/* v2.2.10 卡片按钮：emoji → FA 图标，视觉统一 */
+.yh-btn i { font-size: 1em; line-height: 1; pointer-events: none; vertical-align: -1px; }
+.yh-imgbtns .yh-btn { padding: 5px 8px; border-radius: 8px; }
