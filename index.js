@@ -770,19 +770,22 @@ function bindEvents() {
     $(document).off('click.yhv22_seg').on('click.yhv22_seg', '#yh_mode_segmented .yh-seg-btn', function () {
         setMode($(this).attr('data-mode'));
     });
-    // v2.2 生图接口配置档 CRUD
-    $(document).off('click.yhv22_ip').on('click.yhv22_ip', '#yh_profile_add', addImageProfile);
-    $(document).off('click.yhv22_ip').on('click.yhv22_ip', '#yh_profile_edit', renameImageProfile);
-    $(document).off('click.yhv22_ip').on('click.yhv22_ip', '#yh_profile_delete', deleteImageProfile);
-    $(document).off('change.yhv22_ip').on('change.yhv22_ip', '#yh_image_profile', function () { switchImageProfile($(this).val()); });
+    // v2.2 生图接口配置档 CRUD（同一命名空间先 off 一次，再连续 on，避免互相清掉）
+    $(document).off('click.yhv22_ip change.yhv22_ip');
+    $(document).on('click.yhv22_ip', '#yh_profile_add', addImageProfile)
+               .on('click.yhv22_ip', '#yh_profile_edit', renameImageProfile)
+               .on('click.yhv22_ip', '#yh_profile_delete', deleteImageProfile)
+               .on('change.yhv22_ip', '#yh_image_profile', function () { switchImageProfile($(this).val()); });
     // v2.2 辅助 LLM 配置档 CRUD
-    $(document).off('click.yhv22_llm').on('click.yhv22_llm', '#yh_llm_profile_add', addLlmProfile);
-    $(document).off('click.yhv22_llm').on('click.yhv22_llm', '#yh_llm_profile_edit', renameLlmProfile);
-    $(document).off('click.yhv22_llm').on('click.yhv22_llm', '#yh_llm_profile_delete', deleteLlmProfile);
-    $(document).off('change.yhv22_llm').on('change.yhv22_llm', '#yh_llm_profile', function () { switchLlmProfile($(this).val()); });
+    $(document).off('click.yhv22_llm change.yhv22_llm');
+    $(document).on('click.yhv22_llm', '#yh_llm_profile_add', addLlmProfile)
+               .on('click.yhv22_llm', '#yh_llm_profile_edit', renameLlmProfile)
+               .on('click.yhv22_llm', '#yh_llm_profile_delete', deleteLlmProfile)
+               .on('change.yhv22_llm', '#yh_llm_profile', function () { switchLlmProfile($(this).val()); });
     // v2.2.1 配置档连通性测试
-    $(document).off('click.yhv22_tst').on('click.yhv22_tst', '#yh_profile_test', testImageProfile);
-    $(document).off('click.yhv22_tst').on('click.yhv22_tst', '#yh_llm_profile_test', testLlmProfile);
+    $(document).off('click.yhv22_tst');
+    $(document).on('click.yhv22_tst', '#yh_profile_test', testImageProfile)
+               .on('click.yhv22_tst', '#yh_llm_profile_test', testLlmProfile);
 }
 
 // ============================================================
@@ -2880,5 +2883,5 @@ jQuery(async () => {
         setTimeout(updateUI, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.6`);
+    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.7`);
 });
