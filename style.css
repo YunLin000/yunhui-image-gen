@@ -528,3 +528,8 @@
 
 /* 配置档管理行（下拉 + 新建/重命名/删除） */
 .yh-profile-manage { display: flex; align-items: center; gap: 6px; }
+
+/* v2.2.9 测试按钮结果态着色（toastr 被面板遮住，结果直接画在按钮图标上） */
+.menu_button.yh-testing { opacity: 0.85; cursor: progress; }
+.menu_button.yh-test-ok i { color: #2ecc71 !important; }
+.menu_button.yh-test-fail i { color: #e74c3c !important; }

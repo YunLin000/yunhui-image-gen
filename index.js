@@ -399,15 +399,23 @@ function toggleCollapsedCard(key, collapsed) {
 }
 
 // ---- v2.2.1 配置档连通性测试 ----
-function testImageProfile() {
+async function testImageProfile() {
     const p = getActiveImageProfile();
+    const $btn = $('#yh_profile_test');
     if (!p || !p.baseUrl) { toastr.warning('请先填写云绘地址'); return; }
-    testProfileConn(p.baseUrl, p.apiKey || '', p.model || '', '生图接口');
+    setTestRunning($btn, true);
+    const ok = await testProfileConn(p.baseUrl, p.apiKey || '', p.model || '', '生图接口');
+    setTestRunning($btn, false);
+    setTestResult($btn, ok, '生图接口');
 }
-function testLlmProfile() {
+async function testLlmProfile() {
     const p = getActiveLlmProfile();
+    const $btn = $('#yh_llm_profile_test');
     if (!p || !p.auxUrl) { toastr.warning('请先填写辅助 LLM 地址'); return; }
-    testProfileConn(p.auxUrl, p.auxKey || '', p.auxModel || '', '辅助 LLM', true);
+    setTestRunning($btn, true);
+    const ok = await testProfileConn(p.auxUrl, p.auxKey || '', p.auxModel || '', '辅助 LLM', true);
+    setTestRunning($btn, false);
+    setTestResult($btn, ok, '辅助 LLM');
 }
 async function testProfileConn(baseUrl, apiKey, model, label, isChat) {
     toastr.info(`⏳ 正在测试${label}…`);
@@ -430,9 +438,42 @@ async function testProfileConn(baseUrl, apiKey, model, label, isChat) {
             const n = Array.isArray(data.data) ? data.data.length : '?';
             toastr.success(`✅ ${label}连通正常，模型列表 ${n} 个`);
         }
+        return true;
     } catch (e) {
         toastr.error(`❌ ${label}测试失败：${String(e.message || e).slice(0, 150)}`);
+        return false;
     }
+}
+
+// ---- v2.2.9 测试按钮的加载态（漏斗）与结果态（✓/✗）反馈 ----
+// 面板 overlay z-index 2147483647 > toastr 999999，toastr 会被面板遮住看不到，
+// 所以测试结果直接画在按钮图标上：测试中=⏳旋转，成功=绿✓，失败=红✗，2.5s 后复原。
+function setTestRunning($btn, running) {
+    if (!$btn || !$btn.length) return;
+    const $i = $btn.find('i');
+    if (running) {
+        if (!$btn.data('yhOrigTitle')) $btn.data('yhOrigTitle', $btn.attr('title') || '');
+        $btn.addClass('yh-testing');
+        $i.removeClass('fa-vial-circle-check fa-circle-check fa-circle-xmark').addClass('fa-hourglass-half fa-spin');
+        $btn.attr('title', '测试中…');
+    } else {
+        $btn.removeClass('yh-testing');
+    }
+}
+function setTestResult($btn, ok, label) {
+    if (!$btn || !$btn.length) return;
+    const $i = $btn.find('i');
+    $i.removeClass('fa-hourglass-half fa-spin');
+    $btn.toggleClass('yh-test-ok', !!ok).toggleClass('yh-test-fail', !ok);
+    $i.removeClass('fa-vial-circle-check fa-circle-check fa-circle-xmark')
+      .addClass(ok ? 'fa-circle-check' : 'fa-circle-xmark');
+    $btn.attr('title', (ok ? '✅ ' : '❌ ') + label + (ok ? '连通正常' : '测试失败，详见右下角提示（若被面板遮住请看图标）'));
+    clearTimeout($btn.data('yhTestTimer'));
+    $btn.data('yhTestTimer', setTimeout(() => {
+        $btn.removeClass('yh-test-ok yh-test-fail');
+        $i.removeClass('fa-circle-check fa-circle-xmark').addClass('fa-vial-circle-check');
+        $btn.attr('title', $btn.data('yhOrigTitle') || '测试当前接口连通性');
+    }, 2500));
 }
 
 function loadSettings() {
@@ -2890,5 +2931,5 @@ jQuery(async () => {
         setTimeout(updateUI, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.8`);
+    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.9`);
 });
