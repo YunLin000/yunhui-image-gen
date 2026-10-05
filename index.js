@@ -262,7 +262,8 @@ async function deleteImageProfile() {
     applyImageProfile(getActiveImageProfile(s));
     saveSettingsDebounced();
     updateUI();
-    refreshModels();
+    fillModelSelect(s.models || []);   // 立即回显新档缓存模型列表
+    if (s.baseUrl) refreshModels();    // 有地址才异步刷新（空档不弹警告）
 }
 function switchImageProfile(idx) {
     const s = getSettings();
@@ -274,7 +275,8 @@ function switchImageProfile(idx) {
     applyImageProfile(getActiveImageProfile(s));
     saveSettingsDebounced();
     updateUI();
-    refreshModels();
+    fillModelSelect(s.models || []);   // 回显新档缓存模型
+    if (s.baseUrl) refreshModels();    // 有地址才异步刷新
     if (!s.silent) toastr.info(`已切换生图配置：${getActiveImageProfile(s)?.name || ''}`);
 }
 // ---- 辅助 LLM 配置档 CRUD ----
@@ -312,7 +314,8 @@ async function deleteLlmProfile() {
     applyLlmProfile(getActiveLlmProfile(s));
     saveSettingsDebounced();
     updateUI();
-    refreshAuxModels();
+    fillAuxModelSelect(s.autoMode.auxModels || []);  // 回显新档缓存模型
+    if (s.autoMode.auxUrl) refreshAuxModels();       // 有地址才异步刷新
 }
 function switchLlmProfile(idx) {
     const s = getSettings();
@@ -324,7 +327,8 @@ function switchLlmProfile(idx) {
     applyLlmProfile(getActiveLlmProfile(s));
     saveSettingsDebounced();
     updateUI();
-    refreshAuxModels();
+    fillAuxModelSelect(s.autoMode.auxModels || []);  // 回显新档缓存模型
+    if (s.autoMode.auxUrl) refreshAuxModels();       // 有地址才异步刷新
     if (!s.silent) toastr.info(`已切换辅助 LLM 配置：${getActiveLlmProfile(s)?.name || ''}`);
 }
 
@@ -787,8 +791,12 @@ function bindEvents() {
 function fillModelSelect(models) {
     const s = getSettings();
     const $sel = $('#yh_model');
-    if (!$sel.length || !Array.isArray(models) || !models.length) return;
+    if (!$sel.length) return;
     $sel.empty();
+    if (!Array.isArray(models) || !models.length) {
+        $sel.append('<option value="">（未加载，点刷新获取）</option>');
+        return;
+    }
     models.forEach(m => $sel.append(`<option value="${escapeAttr(m)}">${escapeText(m)}</option>`));
     if (s.model && models.includes(s.model)) $sel.val(s.model);
     else { s.model = models[0]; $sel.val(s.model); saveSettingsDebounced(); }
@@ -799,8 +807,12 @@ function fillAuxModelSelect(models) {
     const s = getSettings();
     const a = s.autoMode;
     const $sel = $('#yh_aux_model');
-    if (!$sel.length || !Array.isArray(models) || !models.length) return;
+    if (!$sel.length) return;
     $sel.empty();
+    if (!Array.isArray(models) || !models.length) {
+        $sel.append('<option value="">（未加载，点刷新获取）</option>');
+        return;
+    }
     models.forEach(m => $sel.append(`<option value="${escapeAttr(m)}">${escapeText(m)}</option>`));
     if (a.auxModel && models.includes(a.auxModel)) $sel.val(a.auxModel);
     else { a.auxModel = models[0]; $sel.val(a.auxModel); saveSettingsDebounced(); }
