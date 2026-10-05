@@ -1,19 +1,25 @@
-<!-- 云绘生图 v2.0 扩展面板精简入口（详细设置在子面板里） -->
+<!-- 云绘生图 v2.2.1 扩展面板精简入口（详细设置在子面板里） -->
 <div class="inline-drawer">
     <div class="inline-drawer-toggle inline-drawer-header">
         <b>☁️ 云绘生图</b>
         <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
     <div class="inline-drawer-content">
-        <div class="flex-container flexnowrap">
-            <span class="margin0">模式：<b id="yh_status_mode">标签生图</b></span>
-            <span class="margin0" style="margin-left:auto;">状态：<span id="yh_status_enabled">—</span></span>
+        <!-- 三段式总开关（关闭/标签生图/自动生图，三选一互斥）-->
+        <div class="yh-seg-wrap">
+            <span class="yh-seg-label">生图模式</span>
+            <div id="yh_mode_segmented" class="yh-segmented" role="tablist">
+                <button type="button" class="yh-seg-btn" data-mode="off" title="关闭整个生图功能"><i class="fa-solid fa-power-off"></i> 关闭</button>
+                <button type="button" class="yh-seg-btn" data-mode="tag" title="监听 local_img 标签生图"><i class="fa-solid fa-tag"></i> 标签生图</button>
+                <button type="button" class="yh-seg-btn" data-mode="auto" title="自动总结场景并生图"><i class="fa-solid fa-robot"></i> 自动生图</button>
+            </div>
         </div>
         <div class="flex-container flexnowrap" style="margin-top:8px;">
-            <button id="yh_open_panel" class="menu_button flex1"><i class="fa-solid fa-expand"></i> 打开云绘生图面板</button>
+            <button id="yh_open_panel" class="menu_button flex1 yh-big-btn"><i class="fa-solid fa-expand"></i> 打开云绘生图面板</button>
         </div>
-        <div class="flex-container flexnowrap" style="margin-top:6px;">
-            <label class="checkbox_label" for="yh_fab_visible"><input type="checkbox" id="yh_fab_visible" class="checkbox"><span>显示悬浮按钮</span></label>
+        <!-- 悬浮按钮开关（卡片装，开关在右） -->
+        <div class="yh-entry-card" style="margin-top:6px;">
+            <div class="yh-switch-row"><b><i class="fa-solid fa-circle-dot"></i> 显示悬浮按钮</b><label class="yh-switch" for="yh_fab_visible"><input type="checkbox" id="yh_fab_visible" class="checkbox"><span class="yh-switch-slider"></span></label></div>
         </div>
     </div>
 </div>

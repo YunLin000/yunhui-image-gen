@@ -58,6 +58,12 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
     hideTagsStream: true, // 流式隐藏 <local_img> 标签（注册 ST 正则脚本，显示层生效）
     fabTop: null, // 悬浮按钮位置（top 像素，可拖拽记忆；null=居中）
     fabVisible: true, // 是否显示悬浮按钮（扩展面板入口可开关）
+    collapsedCards: null, // v2.2.5 折叠卡片记忆（null=未初始化用默认集；存 data-yh-collapse 值数组）
+    // ===== v2.2 多配置档（生图接口 / 辅助 LLM）=====
+    imageProfiles: [],        // 生图接口配置档 [{name, baseUrl, apiKey, model, models:[], width, height, timeout}]
+    activeImageProfile: 0,    // 当前生图配置档索引
+    llmProfiles: [],          // 辅助 LLM 配置档 [{name, auxUrl, auxKey, auxModel, auxModels:[]}]
+    activeLlmProfile: 0,      // 当前辅助 LLM 配置档索引
     // ===== v2.0 自动生图模式（模式2）=====
     autoMode: {
         enabled: false,            // 自动生图模式开关（与标签模式互斥）
@@ -104,7 +110,302 @@ function getSettings() {
     for (const k of Object.keys(defaultSettings.autoMode)) {
         if (s.autoMode[k] === undefined) s.autoMode[k] = structuredClone(defaultSettings.autoMode[k]);
     }
+    migrateProfiles(s); // v2.2 配置档迁移（旧字段 → 默认档）
     return s;
+}
+
+// v2.2：把旧的单套配置迁移成配置档（生图接口 + 辅助 LLM），并让激活档值同步到旧字段
+function migrateProfiles(s) {
+    // 生图接口配置档
+    if (!Array.isArray(s.imageProfiles)) s.imageProfiles = [];
+    if (!s.imageProfiles.length) {
+        s.imageProfiles.push({
+            name: '默认',
+            baseUrl: s.baseUrl || '',
+            apiKey: s.apiKey || '',
+            model: s.model || '',
+            models: Array.isArray(s.models) ? s.models.slice() : [],
+            width: s.width || 768,
+            height: s.height || 1024,
+            timeout: s.timeout || 360,
+        });
+        s.activeImageProfile = 0;
+    }
+    if (!Number.isInteger(s.activeImageProfile) || s.activeImageProfile < 0 || s.activeImageProfile >= s.imageProfiles.length) {
+        s.activeImageProfile = 0;
+    }
+    // 辅助 LLM 配置档（放在顶层，跨模式可用）
+    if (!Array.isArray(s.llmProfiles)) s.llmProfiles = [];
+    if (!s.llmProfiles.length) {
+        s.llmProfiles.push({
+            name: '默认',
+            auxUrl: s.autoMode?.auxUrl || '',
+            auxKey: s.autoMode?.auxKey || '',
+            auxModel: s.autoMode?.auxModel || '',
+            auxModels: Array.isArray(s.autoMode?.auxModels) ? s.autoMode.auxModels.slice() : [],
+        });
+        s.activeLlmProfile = 0;
+    }
+    if (!Number.isInteger(s.activeLlmProfile) || s.activeLlmProfile < 0 || s.activeLlmProfile >= s.llmProfiles.length) {
+        s.activeLlmProfile = 0;
+    }
+    // 激活档值同步到旧字段（保证运行时读 s.baseUrl / a.auxUrl 的旧逻辑一致）
+    applyImageProfile(getActiveImageProfile(s), s);
+    applyLlmProfile(getActiveLlmProfile(s), s);
+}
+
+// ---- v2.2 配置档辅助 ----
+function getActiveImageProfile() {
+    const s = arguments[0] || getSettings();
+    const i = Number(s.activeImageProfile) || 0;
+    if (!Array.isArray(s.imageProfiles) || !s.imageProfiles.length) return null;
+    return s.imageProfiles[i] || s.imageProfiles[0] || null;
+}
+function getActiveLlmProfile() {
+    const s = arguments[0] || getSettings();
+    const i = Number(s.activeLlmProfile) || 0;
+    if (!Array.isArray(s.llmProfiles) || !s.llmProfiles.length) return null;
+    return s.llmProfiles[i] || s.llmProfiles[0] || null;
+}
+// UI 字段 → 当前激活档（切档/改值前调用，保证不丢）
+function saveImageProfileFields() {
+    const s = getSettings();
+    const p = getActiveImageProfile(s); if (!p) return;
+    p.baseUrl = s.baseUrl || '';
+    p.apiKey = s.apiKey || '';
+    p.model = s.model || '';
+    p.width = s.width || 768;
+    p.height = s.height || 1024;
+    p.timeout = s.timeout || 360;
+    if (Array.isArray(s.models)) p.models = s.models.slice();
+}
+function saveLlmProfileFields() {
+    const s = getSettings();
+    const p = getActiveLlmProfile(s); if (!p) return;
+    const a = s.autoMode || {};
+    p.auxUrl = a.auxUrl || '';
+    p.auxKey = a.auxKey || '';
+    p.auxModel = a.auxModel || '';
+    if (Array.isArray(a.auxModels)) p.auxModels = a.auxModels.slice();
+}
+// 激活档 → UI 字段（切换档后同步，旧逻辑读 s.* 不受影响）
+function applyImageProfile(p, s) {
+    s = s || getSettings(); if (!p) return;
+    s.baseUrl = p.baseUrl || '';
+    s.apiKey = p.apiKey || '';
+    s.model = p.model || '';
+    s.width = p.width || 768;
+    s.height = p.height || 1024;
+    s.timeout = p.timeout || 360;
+    s.models = Array.isArray(p.models) ? p.models.slice() : [];
+}
+function applyLlmProfile(p, s) {
+    s = s || getSettings(); const a = s.autoMode || {}; if (!p) return;
+    a.auxUrl = p.auxUrl || '';
+    a.auxKey = p.auxKey || '';
+    a.auxModel = p.auxModel || '';
+    a.auxModels = Array.isArray(p.auxModels) ? p.auxModels.slice() : [];
+}
+// 填充配置档下拉
+function fillImageProfileSelect() {
+    const s = getSettings();
+    const $sel = $('#yh_image_profile'); if (!$sel.length) return;
+    $sel.empty();
+    s.imageProfiles.forEach((p, i) => {
+        $sel.append(`<option value="${i}">${escapeText(p.name || ('配置' + (i + 1)))}</option>`);
+    });
+    $sel.val(String(s.activeImageProfile));
+}
+function fillLlmProfileSelect() {
+    const s = getSettings();
+    const $sel = $('#yh_llm_profile'); if (!$sel.length) return;
+    $sel.empty();
+    s.llmProfiles.forEach((p, i) => {
+        $sel.append(`<option value="${i}">${escapeText(p.name || ('配置' + (i + 1)))}</option>`);
+    });
+    $sel.val(String(s.activeLlmProfile));
+}
+// ---- 生图配置档 CRUD ----
+function addImageProfile() {
+    const s = getSettings();
+    const name = window.prompt('新生图配置名称', '新配置');
+    if (name === null) return;
+    saveImageProfileFields(); // 当前表单值先存回旧档
+    s.imageProfiles.push({
+        name: (name.trim() || ('配置' + (s.imageProfiles.length + 1))),
+        baseUrl: '', apiKey: '', model: '', models: [],
+        width: 768, height: 1024, timeout: 360,
+    });
+    s.activeImageProfile = s.imageProfiles.length - 1;
+    applyImageProfile(getActiveImageProfile(s));
+    saveSettingsDebounced();
+    updateUI();
+    if (!s.silent) toastr.info('已新建生图配置，请填写地址和模型');
+}
+function renameImageProfile() {
+    const s = getSettings();
+    const p = getActiveImageProfile(s); if (!p) return;
+    const name = window.prompt('重命名生图配置', p.name || '');
+    if (name === null || !name.trim()) return;
+    p.name = name.trim();
+    saveSettingsDebounced();
+    fillImageProfileSelect();
+}
+function deleteImageProfile() {
+    const s = getSettings();
+    if (s.imageProfiles.length <= 1) { toastr.warning('至少保留一个生图配置'); return; }
+    const p = getActiveImageProfile(s);
+    if (!window.confirm(`确定删除生图配置「${p.name}」？`)) return;
+    s.imageProfiles.splice(Number(s.activeImageProfile), 1);
+    s.activeImageProfile = Math.max(0, Number(s.activeImageProfile) - 1);
+    applyImageProfile(getActiveImageProfile(s));
+    saveSettingsDebounced();
+    updateUI();
+    refreshModels();
+}
+function switchImageProfile(idx) {
+    const s = getSettings();
+    idx = Number(idx);
+    if (Number.isNaN(idx) || idx < 0 || idx >= s.imageProfiles.length) return;
+    if (idx === Number(s.activeImageProfile)) return;
+    saveImageProfileFields(); // 旧档存值
+    s.activeImageProfile = idx;
+    applyImageProfile(getActiveImageProfile(s));
+    saveSettingsDebounced();
+    updateUI();
+    refreshModels();
+    if (!s.silent) toastr.info(`已切换生图配置：${getActiveImageProfile(s)?.name || ''}`);
+}
+// ---- 辅助 LLM 配置档 CRUD ----
+function addLlmProfile() {
+    const s = getSettings();
+    const name = window.prompt('新辅助 LLM 配置名称', '新配置');
+    if (name === null) return;
+    saveLlmProfileFields();
+    s.llmProfiles.push({
+        name: (name.trim() || ('配置' + (s.llmProfiles.length + 1))),
+        auxUrl: '', auxKey: '', auxModel: '', auxModels: [],
+    });
+    s.activeLlmProfile = s.llmProfiles.length - 1;
+    applyLlmProfile(getActiveLlmProfile(s));
+    saveSettingsDebounced();
+    updateUI();
+    if (!s.silent) toastr.info('已新建辅助 LLM 配置，请填写地址和模型');
+}
+function renameLlmProfile() {
+    const s = getSettings();
+    const p = getActiveLlmProfile(s); if (!p) return;
+    const name = window.prompt('重命名辅助 LLM 配置', p.name || '');
+    if (name === null || !name.trim()) return;
+    p.name = name.trim();
+    saveSettingsDebounced();
+    fillLlmProfileSelect();
+}
+function deleteLlmProfile() {
+    const s = getSettings();
+    if (s.llmProfiles.length <= 1) { toastr.warning('至少保留一个辅助 LLM 配置'); return; }
+    const p = getActiveLlmProfile(s);
+    if (!window.confirm(`确定删除辅助 LLM 配置「${p.name}」？`)) return;
+    s.llmProfiles.splice(Number(s.activeLlmProfile), 1);
+    s.activeLlmProfile = Math.max(0, Number(s.activeLlmProfile) - 1);
+    applyLlmProfile(getActiveLlmProfile(s));
+    saveSettingsDebounced();
+    updateUI();
+    refreshAuxModels();
+}
+function switchLlmProfile(idx) {
+    const s = getSettings();
+    idx = Number(idx);
+    if (Number.isNaN(idx) || idx < 0 || idx >= s.llmProfiles.length) return;
+    if (idx === Number(s.activeLlmProfile)) return;
+    saveLlmProfileFields();
+    s.activeLlmProfile = idx;
+    applyLlmProfile(getActiveLlmProfile(s));
+    saveSettingsDebounced();
+    updateUI();
+    refreshAuxModels();
+    if (!s.silent) toastr.info(`已切换辅助 LLM 配置：${getActiveLlmProfile(s)?.name || ''}`);
+}
+
+// ---- v2.2 三段式总开关（关闭/标签/自动）----
+function getMode() {
+    const s = getSettings();
+    if (s.autoMode?.enabled) return 'auto';
+    if (s.enabled) return 'tag';
+    return 'off';
+}
+function syncSegmented() {
+    const mode = getMode();
+    $('#yh_mode_segmented .yh-seg-btn').removeClass('active');
+    $(`#yh_mode_segmented .yh-seg-btn[data-mode="${mode}"]`).addClass('active');
+}
+function setMode(mode) {
+    const s = getSettings();
+    if (mode === 'off') { s.enabled = false; s.autoMode.enabled = false; }
+    else if (mode === 'tag') { s.enabled = true; s.autoMode.enabled = false; }
+    else if (mode === 'auto') { s.enabled = false; s.autoMode.enabled = true; }
+    saveSettingsDebounced();
+    updateUI(); // 同步 checkbox + 灰化 + 三段式高亮
+}
+
+// ---- v2.2.5 卡片折叠状态记忆 ----
+const YH_DEFAULT_COLLAPSED = ['yh_p2_c4', 'yh_p2_c5', 'yh_p2_c6', 'yh_p3_c1'];
+function getCollapsedSet() {
+    const s = getSettings();
+    if (!Array.isArray(s.collapsedCards)) { s.collapsedCards = YH_DEFAULT_COLLAPSED.slice(); saveSettingsDebounced(); }
+    return new Set(s.collapsedCards);
+}
+function applyCollapsedState() {
+    const set = getCollapsedSet();
+    $('.yh-panel-card').each(function () {
+        const key = $(this).children('.yh-card-head').attr('data-yh-collapse');
+        if (key) $(this).toggleClass('collapsed', set.has(key));
+    });
+}
+function toggleCollapsedCard(key, collapsed) {
+    const s = getSettings();
+    if (!Array.isArray(s.collapsedCards)) s.collapsedCards = YH_DEFAULT_COLLAPSED.slice();
+    const i = s.collapsedCards.indexOf(key);
+    if (collapsed && i < 0) s.collapsedCards.push(key);
+    else if (!collapsed && i >= 0) s.collapsedCards.splice(i, 1);
+    saveSettingsDebounced();
+}
+
+// ---- v2.2.1 配置档连通性测试 ----
+function testImageProfile() {
+    const p = getActiveImageProfile();
+    if (!p || !p.baseUrl) { toastr.warning('请先填写云绘地址'); return; }
+    testProfileConn(p.baseUrl, p.apiKey || '', p.model || '', '生图接口');
+}
+function testLlmProfile() {
+    const p = getActiveLlmProfile();
+    if (!p || !p.auxUrl) { toastr.warning('请先填写辅助 LLM 地址'); return; }
+    testProfileConn(p.auxUrl, p.auxKey || '', p.auxModel || '', '辅助 LLM', true);
+}
+async function testProfileConn(baseUrl, apiKey, model, label, isChat) {
+    toastr.info(`⏳ 正在测试${label}…`);
+    try {
+        const u = String(baseUrl).replace(/\/+$/, '');
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+        let res;
+        if (isChat) {
+            res = await fetch(`${u}/chat/completions`, {
+                method: 'POST', headers,
+                body: JSON.stringify({ model: model || 'gpt-4o-mini', messages: [{ role: 'user', content: 'ping' }], max_tokens: 5 }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`);
+            toastr.success(`✅ ${label}连通正常（HTTP ${res.status}）`);
+        } else {
+            res = await fetch(`${u}/models`, { headers });
+            if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text().catch(() => '')).slice(0, 120)}`);
+            const data = await res.json().catch(() => ({}));
+            const n = Array.isArray(data.data) ? data.data.length : '?';
+            toastr.success(`✅ ${label}连通正常，模型列表 ${n} 个`);
+        }
+    } catch (e) {
+        toastr.error(`❌ ${label}测试失败：${String(e.message || e).slice(0, 150)}`);
+    }
 }
 
 function loadSettings() {
@@ -131,15 +432,17 @@ async function createSettings() {
     }
 
     bindEvents();
+    // v2.2.5 卡片折叠状态记忆（按用户上次操作恢复，首次用默认折叠集）
+    applyCollapsedState();
     // 模型下拉：先用持久化列表回显（刷新后不空白），再异步拉取更新
     const s0 = getSettings();
     if (s0.models?.length) fillModelSelect(s0.models);
     if (s0.autoMode?.auxModels?.length) fillAuxModelSelect(s0.autoMode.auxModels);
     updateUI();
     syncHideTagsRegex(); // 注册流式隐藏正则
-    // 启动时自动拉一次模型（生图 + 辅助）
-    if (s0.baseUrl) refreshModels();
-    if (s0.autoMode?.auxUrl) refreshAuxModels();
+    // 启动时自动拉一次模型（生图 + 辅助；按当前配置档）
+    if (getActiveImageProfile(s0)?.baseUrl) refreshModels();
+    if (getActiveLlmProfile(s0)?.auxUrl) refreshAuxModels();
 }
 
 function updateUI() {
@@ -163,7 +466,7 @@ function updateUI() {
     set('yh_inject_prompt', s.injectPrompt);
     set('yh_inject_position', s.injectPosition);
     set('yh_inject_depth', s.injectDepth);
-    $(`input[name="yh_insert_type"][value="${s.insertType}"]`).prop('checked', true);
+    set('yh_insert_type', s.insertType);
     refreshPresetSelect();
 
     // ===== v2.0 自动生图设置 =====
@@ -189,30 +492,29 @@ function updateUI() {
     renderTableEditor();
     check('yh_fab_visible', s.fabVisible);
     $('#yh_fab').toggle(!!s.fabVisible); // 同步悬浮按钮显示状态
+    fillImageProfileSelect();  // v2.2 配置档下拉
+    fillLlmProfileSelect();
+    syncSegmented();           // v2.2 三段式高亮（updateStatusBar 已并入，避免重复调用）
     updateDisabledState();
-    updateStatusBar();
 }
 
-// 互斥灰化：对方模式启用时，本 tab 参数区变灰停用
+// 灰化：模式未启用 → 该模式的参数区 + 开关卡片 + tab 同步变灰（v2.2.5 修正方向）
+// 旧逻辑是「对方启用才灰自己」，导致「自己关掉后不灰、必须刷新才复位」；改为「自己未启用就自己灰」
 function updateDisabledState() {
     const s = getSettings();
     const en1 = !!s.enabled;
     const en2 = !!s.autoMode?.enabled;
-    // 参数区灰化
-    $('#yh_pane1_body').toggleClass('disabled', en2);   // 自动启用 → 标签参数灰
-    $('#yh_pane2_body').toggleClass('disabled', en1);   // 标签启用 → 自动参数灰
-    // tab 按钮也灰（视觉提示该模式已停用）
-    $('.yh-panel-tab[data-yh-tab="yh_tab_pane1"]').toggleClass('yh-tab-disabled', en2);
-    $('.yh-panel-tab[data-yh-tab="yh_tab_pane2"]').toggleClass('yh-tab-disabled', en1);
+    // 参数区 + 模式开关卡片：未启用 → 灰
+    $('#yh_pane1_body, .yh-mode-card:has(#yh_enabled)').toggleClass('disabled', !en1);
+    $('#yh_pane2_body, .yh-mode-card:has(#yh_auto_enabled)').toggleClass('disabled', !en2);
+    // tab 按钮同步灰化
+    $('.yh-panel-tab[data-yh-tab="yh_tab_pane1"]').toggleClass('yh-tab-disabled', !en1);
+    $('.yh-panel-tab[data-yh-tab="yh_tab_pane2"]').toggleClass('yh-tab-disabled', !en2);
 }
 
-// 扩展面板入口的状态行
+// 扩展面板入口的状态行（v2.2：三段式高亮即状态）
 function updateStatusBar() {
-    const s = getSettings();
-    const auto = !!s.autoMode?.enabled;
-    const modeLabel = auto ? '自动生图' : (s.enabled ? '标签生图' : '未启用');
-    $('#yh_status_mode').text(modeLabel);
-    $('#yh_status_enabled').text((auto || s.enabled) ? '✅ 启用' : '⭕ 停用');
+    syncSegmented();
 }
 
 // ============================================================
@@ -220,11 +522,12 @@ function updateStatusBar() {
 // ============================================================
 function bindEvents() {
     const s = getSettings();
-    const persist = (id, key, isCheck, isNum) => {
+    const persist = (id, key, isCheck, isNum, extra) => {
         $(`#${id}`).on('input change', function () {
             let v = isCheck ? $(this).prop('checked') : $(this).val();
             if (isNum) v = parseInt(String(v)) || 0;
             s[key] = v;
+            if (extra) extra();
             saveSettingsDebounced();
         });
     };
@@ -242,14 +545,15 @@ function bindEvents() {
         updateStatusBar();
     });
     persist('yh_silent', 'silent', true);
-    persist('yh_base_url', 'baseUrl');
-    persist('yh_api_key', 'apiKey');
-    persist('yh_width', 'width', false, true);
-    persist('yh_height', 'height', false, true);
+    // v2.2：接口字段改动时同步写回当前生图配置档
+    persist('yh_base_url', 'baseUrl', false, false, saveImageProfileFields);
+    persist('yh_api_key', 'apiKey', false, false, saveImageProfileFields);
+    persist('yh_width', 'width', false, true, saveImageProfileFields);
+    persist('yh_height', 'height', false, true, saveImageProfileFields);
     // 尺寸变更时同步更新正则占位符尺寸（保持三处一致）
     $('#yh_width').on('change', syncHideTagsRegex);
     $('#yh_height').on('change', syncHideTagsRegex);
-    persist('yh_timeout', 'timeout', false, true);
+    persist('yh_timeout', 'timeout', false, true, saveImageProfileFields);
     persist('yh_negative', 'negativePrompt');
     persist('yh_style', 'stylePrompt');
     persist('yh_style_prepend', 'stylePrepend', true);
@@ -264,14 +568,11 @@ function bindEvents() {
     persist('yh_inject_position', 'injectPosition');
     persist('yh_inject_depth', 'injectDepth', false, true);
 
-    $('input[name="yh_insert_type"]').on('change', function () {
-        s.insertType = $(this).val();
-        saveSettingsDebounced();
-    });
+    persist('yh_insert_type', 'insertType');
 
     // 模型刷新 + 模型选择
     $('#yh_refresh_models').on('click', refreshModels);
-    $('#yh_model').on('change', function () { s.model = $(this).val(); saveSettingsDebounced(); });
+    $('#yh_model').on('change', function () { s.model = $(this).val(); saveImageProfileFields(); saveSettingsDebounced(); });
 
     // 预设 CRUD
     $('#yh_preset_add').on('click', addPreset);
@@ -285,11 +586,12 @@ function bindEvents() {
 
     // ===== v2.0 自动生图设置 =====
     const a = s.autoMode;
-    const persistA = (id, key, isCheck, isNum) => {
+    const persistA = (id, key, isCheck, isNum, extra) => {
         $(`#${id}`).on('input change', function () {
             let v = isCheck ? $(this).prop('checked') : $(this).val();
             if (isNum) v = parseInt(String(v)) || 0;
             a[key] = v;
+            if (extra) extra();
             saveSettingsDebounced();
             updateStatusBar();
         });
@@ -314,14 +616,20 @@ function bindEvents() {
     persistA('yh_card_layout', 'cardLayout');
     persistA('yh_auto_source', 'source');
     persistA('yh_auto_keep', 'keepDays', false, true);
-    persistA('yh_aux_url', 'auxUrl');
-    persistA('yh_aux_key', 'auxKey');
-    persistA('yh_aux_model', 'auxModel');
+    // v2.2：辅助 LLM 字段改动时同步写回当前 LLM 配置档
+    persistA('yh_aux_url', 'auxUrl', false, false, saveLlmProfileFields);
+    persistA('yh_aux_key', 'auxKey', false, false, saveLlmProfileFields);
+    persistA('yh_aux_model', 'auxModel', false, false, saveLlmProfileFields);
     // 总结列管理
     $('#yh_add_col').on('click', addColumn);
     $('#yh_columns_list').on('pointerdown', '.yh-col-del', function (e) {
         e.stopPropagation();
-        removeColumn(parseInt($(this).attr('data-idx')));
+        const idx = parseInt($(this).attr('data-idx'));
+        const a = getSettings().autoMode;
+        const col = a.customColumns && a.customColumns[idx];
+        if (!col) return;
+        if (!window.confirm(`确定删除列「${col.name}」？删除后该列不再总结/显示`)) return;
+        removeColumn(idx);
     });
     $('#yh_columns_list').on('change', '.yh-col-rule', function () {
         const idx = parseInt($(this).attr('data-idx'));
@@ -427,11 +735,30 @@ function bindEvents() {
     $('#yh_test_clear').on('click', function () { yhLastDebug = { sys: '', user: '', raw: '', ts: 0, source: '' }; renderTestTab(); });
     $('#yh_test_req').on('click', function () { showBigViewer('LLM 请求体（system + user）', buildDebugRequestText()); });
     $('#yh_test_resp').on('click', function () { showBigViewer('LLM 响应体（原始返回）', yhLastDebug.raw || '（暂无数据）'); });
-    // 公共区折叠切换
-    $('#yh_common_toggle').on('click', function () {
-        $('#yh_common_content').slideToggle(150);
-        $(this).find('.yh-common-chevron').toggleClass('fa-chevron-down fa-chevron-up');
+    // v2.2.5 面板卡片折叠（点击标题栏收起/展开，状态持久化记忆）
+    $(document).off('click.yhv22_card').on('click.yhv22_card', '.yh-panel-card > .yh-card-head', function () {
+        const $card = $(this).closest('.yh-panel-card');
+        const key = $(this).attr('data-yh-collapse');
+        $card.toggleClass('collapsed');
+        if (key) toggleCollapsedCard(key, $card.hasClass('collapsed'));
     });
+    // v2.2 三段式总开关（入口抽屉）
+    $(document).off('click.yhv22_seg').on('click.yhv22_seg', '#yh_mode_segmented .yh-seg-btn', function () {
+        setMode($(this).attr('data-mode'));
+    });
+    // v2.2 生图接口配置档 CRUD
+    $(document).off('click.yhv22_ip').on('click.yhv22_ip', '#yh_profile_add', addImageProfile);
+    $(document).off('click.yhv22_ip').on('click.yhv22_ip', '#yh_profile_edit', renameImageProfile);
+    $(document).off('click.yhv22_ip').on('click.yhv22_ip', '#yh_profile_delete', deleteImageProfile);
+    $(document).off('change.yhv22_ip').on('change.yhv22_ip', '#yh_image_profile', function () { switchImageProfile($(this).val()); });
+    // v2.2 辅助 LLM 配置档 CRUD
+    $(document).off('click.yhv22_llm').on('click.yhv22_llm', '#yh_llm_profile_add', addLlmProfile);
+    $(document).off('click.yhv22_llm').on('click.yhv22_llm', '#yh_llm_profile_edit', renameLlmProfile);
+    $(document).off('click.yhv22_llm').on('click.yhv22_llm', '#yh_llm_profile_delete', deleteLlmProfile);
+    $(document).off('change.yhv22_llm').on('change.yhv22_llm', '#yh_llm_profile', function () { switchLlmProfile($(this).val()); });
+    // v2.2.1 配置档连通性测试
+    $(document).off('click.yhv22_tst').on('click.yhv22_tst', '#yh_profile_test', testImageProfile);
+    $(document).off('click.yhv22_tst').on('click.yhv22_tst', '#yh_llm_profile_test', testLlmProfile);
 }
 
 // ============================================================
@@ -2399,9 +2726,8 @@ function openPanel() {
 function doOpenPanel() {
     yhPanelOpenedAt = Date.now(); // 记录打开时间（防同一次点击残留立即关闭面板）
     $('#yh_panel_overlay').css('display', 'flex');
-    // 恢复上次选择的 tab（持久化）
-    const savedTab = getSettings().activeTab || 'yh_tab_pane1';
-    switchTab(savedTab);
+    // v2.2 方案A：默认 tab 跟随三段式（关闭/标签 → 标签 tab；自动 → 自动 tab），废弃旧 activeTab 记忆
+    switchTab(getMode() === 'auto' ? 'yh_tab_pane2' : 'yh_tab_pane1');
     renderTableEditor(); // 打开面板时刷新表格（切聊天后数据更新）
     updateUI(); // 打开时同步最新设置
     renderTestTab(); // 测试 tab 同步最近一次请求/响应
@@ -2411,13 +2737,12 @@ function closePanel() {
     $('#yh_panel_overlay').hide();
 }
 function switchTab(paneId) {
-    const s = getSettings();
-    s.activeTab = paneId; // 记住当前 tab（下次打开面板恢复）
-    saveSettingsDebounced();
     $('.yh-panel-tab').removeClass('active');
     $(`.yh-panel-tab[data-yh-tab="${paneId}"]`).addClass('active');
     $('.yh-tab-pane').removeClass('active');
     $(`#${paneId}`).addClass('active');
+    // v2.2.1 测试 tab 隐藏公共区（生图接口 / 画风与提示），避免设置项混进调试界面
+    $('.yh-common-zone').toggle(paneId !== 'yh_tab_pane3');
 }
 
 // ============================================================
@@ -2521,5 +2846,5 @@ jQuery(async () => {
         setTimeout(updateUI, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.0.0`);
+    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.5`);
 });

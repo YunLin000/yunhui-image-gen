@@ -1,4 +1,4 @@
-<!-- 云绘生图 v2.0 全屏子面板（顶部公共区 + 两 tab 带开关 + 互斥灰化） -->
+<!-- 云绘生图 v2.2.4 全屏子面板（卡片化分组 + 多接口配置档 + toggle 开关） -->
 <div id="yh_panel_overlay" class="yh-panel-overlay" style="display:none;">
   <div class="yh-panel">
     <div class="yh-panel-header">
@@ -12,109 +12,165 @@
     </div>
     <div class="yh-panel-body">
 
-      <!-- ===== 顶部公共区（两模式共用） ===== -->
-      <div class="yh-common-section">
-        <div class="yh-common-toggle" id="yh_common_toggle">
-          <span><i class="fa-solid fa-globe"></i> 公共生图接口（两模式共用）</span>
-          <i class="fa-solid fa-chevron-down yh-common-chevron"></i>
-        </div>
-        <div class="yh-common-content" id="yh_common_content">
+      <div class="yh-common-zone">
+      <!-- ===== 公共区 · 生图接口配置档（卡片） ===== -->
+      <div class="yh-section yh-panel-card">
+        <div class="yh-section-title yh-card-head" data-yh-collapse="yh_common_body"><span><i class="fa-solid fa-plug"></i> 生图接口（多配置档）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+        <div class="yh-card-body" id="yh_common_body">
+          <div class="yh-profile-manage">
+            <select id="yh_image_profile" class="text_pole flex1" title="切换当前生图接口配置"></select>
+            <div id="yh_profile_add" class="menu_button menu_button_icon" title="新增生图配置"><i class="fa-solid fa-plus"></i></div>
+            <div id="yh_profile_edit" class="menu_button menu_button_icon" title="重命名当前配置"><i class="fa-solid fa-pen"></i></div>
+            <div id="yh_profile_delete" class="menu_button menu_button_icon" title="删除当前配置"><i class="fa-solid fa-trash"></i></div>
+            <div id="yh_profile_test" class="menu_button menu_button_icon" title="测试当前接口连通性"><i class="fa-solid fa-vial-circle-check"></i></div>
+          </div>
           <div class="flex-container flexnowrap"><label for="yh_base_url" class="flex1">云绘地址</label><input id="yh_base_url" class="text_pole widthNatural" type="text" placeholder="http://127.0.0.1:8080/v1"></div>
           <div class="flex-container flexnowrap"><label for="yh_api_key" class="flex1">API Key（可选）</label><input id="yh_api_key" class="text_pole flex1" type="text" placeholder="留空则不带 Authorization"></div>
           <div class="flex-container flexnowrap"><label for="yh_model" class="flex1">生图模型</label><select id="yh_model" class="text_pole flex1"></select><div id="yh_refresh_models" class="menu_button menu_button_icon" title="刷新模型列表"><i class="fa-solid fa-rotate"></i></div></div>
           <div class="flex-container flexnowrap"><label for="yh_width" class="flex1">图片宽度</label><input id="yh_width" class="text_pole widthNatural" type="number" min="64" max="4096" value="768"><label for="yh_height" class="flex1" style="margin-left:8px;">图片高度</label><input id="yh_height" class="text_pole widthNatural" type="number" min="64" max="4096" value="1024"></div>
           <div class="flex-container flexnowrap"><label for="yh_timeout" class="flex1">生成超时（秒）</label><input id="yh_timeout" class="text_pole widthNatural" type="number" min="30" max="600" value="360" title="默认 6 分钟"></div>
+        </div>
+      </div>
+
+      <!-- ===== 公共区 · 画风与静默（卡片） ===== -->
+      <div class="yh-section yh-panel-card">
+        <div class="yh-section-title yh-card-head" data-yh-collapse="yh_style_body"><span><i class="fa-solid fa-palette"></i> 画风与提示</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+        <div class="yh-card-body" id="yh_style_body">
           <div><label for="yh_negative" class="flex1">负面提示词</label><textarea id="yh_negative" class="text_pole textarea_compact" rows="2" placeholder="blurry, low quality"></textarea></div>
           <div><label for="yh_style" class="flex1">画风/画质词</label><textarea id="yh_style" class="text_pole textarea_compact" rows="2" placeholder="写实照片，逼真质感，服饰反光，8k"></textarea></div>
-          <div class="flex-container flexnowrap"><label class="checkbox_label" for="yh_style_prepend"><input type="checkbox" id="yh_style_prepend" class="checkbox"><span>拼接到提示词前面</span></label></div>
+          <div class="yh-sub-card">
+            <div class="yh-switch-row"><b>拼接到提示词前面</b><label class="yh-switch" for="yh_style_prepend"><input type="checkbox" id="yh_style_prepend" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+          </div>
           <div class="title_restorable">画风预设</div>
           <div class="flex-container flexnowrap"><select id="yh_preset_select" class="text_pole flex1"></select><div id="yh_preset_add" class="menu_button menu_button_icon" title="新建预设"><i class="fa-solid fa-plus"></i></div><div id="yh_preset_update" class="menu_button menu_button_icon" title="修改当前预设"><i class="fa-solid fa-pen"></i></div><div id="yh_preset_delete" class="menu_button menu_button_icon" title="删除当前预设"><i class="fa-solid fa-trash"></i></div></div>
-          <label class="checkbox_label" for="yh_silent" style="margin-top:6px;"><input type="checkbox" id="yh_silent" class="checkbox"><span>静默模式（不弹进度提示）</span></label>
+          <div class="yh-sub-card">
+            <div class="yh-switch-row"><b>静默模式（不弹进度提示）</b><label class="yh-switch" for="yh_silent"><input type="checkbox" id="yh_silent" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+          </div>
         </div>
+      </div>
       </div>
 
       <hr class="sysHR">
 
       <!-- ===== Tab1: 标签生图 ===== -->
       <div class="yh-tab-pane active" id="yh_tab_pane1">
-        <label class="checkbox_label" for="yh_enabled"><input type="checkbox" id="yh_enabled" class="checkbox"><span><b>启用标签生图</b></span></label>
+        <div class="yh-section yh-panel-card yh-mode-card">
+          <div class="yh-switch-row"><b><i class="fa-solid fa-tag"></i> 启用标签生图</b><label class="yh-switch" for="yh_enabled"><input type="checkbox" id="yh_enabled" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+        </div>
         <div class="yh-pane-body" id="yh_pane1_body" style="margin-top:8px;">
-          <div class="yh-section">
-            <div class="yh-section-title">标签设置</div>
-            <div><label for="yh_capture_regex" class="flex1">捕获正则</label><textarea id="yh_capture_regex" class="text_pole textarea_compact" rows="2" placeholder="/&lt;pic[^&gt;]*\sprompt=&quot;([^&quot;]*)&quot;[^&gt;]*?&gt;/g"></textarea></div>
-            <div class="flex-container flexnowrap"><label class="checkbox_label" for="yh_hide_tags_stream"><input type="checkbox" id="yh_hide_tags_stream" class="checkbox"><span>流式隐藏 &lt;local_img&gt; 标签（推荐开）</span></label></div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p1_c1"><span><i class="fa-solid fa-tags"></i> 标签设置</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p1_c1">
+              <div><label for="yh_capture_regex" class="flex1">捕获正则</label><textarea id="yh_capture_regex" class="text_pole textarea_compact" rows="2" placeholder="/&lt;pic[^&gt;]*\sprompt=&quot;([^&quot;]*)&quot;[^&gt;]*?&gt;/g"></textarea></div>
+              <div class="yh-sub-card">
+                <div class="yh-switch-row"><b>流式隐藏 &lt;local_img&gt; 标签（推荐开）</b><label class="yh-switch" for="yh_hide_tags_stream"><input type="checkbox" id="yh_hide_tags_stream" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+              </div>
+            </div>
           </div>
-          <div class="yh-section">
-            <div class="yh-section-title">提示词注入</div>
-            <div class="flex-container flexnowrap"><label class="checkbox_label" for="yh_inject_enabled"><input type="checkbox" id="yh_inject_enabled" class="checkbox"><span>启用提示词注入</span></label></div>
-            <div><label for="yh_inject_prompt" class="flex1">注入模板</label><textarea id="yh_inject_prompt" class="text_pole textarea_compact" rows="3" placeholder="You must insert a &lt;pic prompt=&quot;...&quot;&gt; tag..."></textarea></div>
-            <div class="flex-container flexnowrap"><label for="yh_inject_position" class="flex1">注入位置</label><select id="yh_inject_position" class="text_pole widthNatural margin0"><option value="deep_system">@D ⚙️</option><option value="deep_user">@D 👤</option><option value="deep_assistant">@D 🤖</option></select><label for="yh_inject_depth" class="flex1" style="margin-left:8px;">深度</label><input id="yh_inject_depth" class="text_pole widthUnset" type="number" min="0" max="100" value="0"></div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p1_c2"><span><i class="fa-solid fa-syringe"></i> 提示词注入</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p1_c2">
+              <div class="yh-sub-card">
+                <div class="yh-switch-row"><b>启用提示词注入</b><label class="yh-switch" for="yh_inject_enabled"><input type="checkbox" id="yh_inject_enabled" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+              </div>
+              <div><label for="yh_inject_prompt" class="flex1">注入模板</label><textarea id="yh_inject_prompt" class="text_pole textarea_compact" rows="3" placeholder="You must insert a &lt;pic prompt=&quot;...&quot;&gt; tag..."></textarea></div>
+              <div class="flex-container flexnowrap"><label for="yh_inject_position" class="flex1">注入位置</label><select id="yh_inject_position" class="text_pole widthNatural margin0"><option value="deep_system">@D ⚙️</option><option value="deep_user">@D 👤</option><option value="deep_assistant">@D 🤖</option></select><label for="yh_inject_depth" class="flex1" style="margin-left:8px;">深度</label><input id="yh_inject_depth" class="text_pole widthUnset" type="number" min="0" max="100" value="0"></div>
+            </div>
           </div>
-          <div class="yh-section">
-            <div class="yh-section-title">插入模式</div>
-            <div class="flex-container flexnowrap"><label class="radio_label" for="yh_insert_replace"><input type="radio" name="yh_insert_type" id="yh_insert_replace" value="replace"><span>标签原位置（默认）</span></label></div>
-            <div class="flex-container flexnowrap"><label class="radio_label" for="yh_insert_inline"><input type="radio" name="yh_insert_type" id="yh_insert_inline" value="inline"><span>消息底部</span></label></div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p1_c3"><span><i class="fa-solid fa-image"></i> 图片显示位置</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p1_c3">
+              <div class="flex-container flexnowrap"><label for="yh_insert_type" class="flex1">显示位置</label><select id="yh_insert_type" class="text_pole widthNatural margin0"><option value="replace">标签原位置（默认）</option><option value="inline">消息底部</option></select></div>
+              <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">标签原位置=图片显示在 &lt;local_img&gt; 标签处；消息底部=图片显示在消息末尾</div>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- ===== Tab2: 自动生图 ===== -->
       <div class="yh-tab-pane" id="yh_tab_pane2">
-        <label class="checkbox_label" for="yh_auto_enabled"><input type="checkbox" id="yh_auto_enabled" class="checkbox"><span><b>启用自动生图模式</b></span></label>
+        <div class="yh-section yh-panel-card yh-mode-card">
+          <div class="yh-switch-row"><b><i class="fa-solid fa-robot"></i> 启用自动生图</b><label class="yh-switch" for="yh_auto_enabled"><input type="checkbox" id="yh_auto_enabled" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+        </div>
         <div class="yh-pane-body" id="yh_pane2_body" style="margin-top:8px;">
-          <div class="yh-section">
-            <div class="yh-section-title">基本设置</div>
-            <div class="flex-container flexnowrap"><label for="yh_auto_count" class="flex1">生图张数</label><input id="yh_auto_count" class="text_pole widthNatural" type="number" min="1" max="10" value="3"></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_history" class="flex1">上传最近聊天记录条数</label><input id="yh_auto_history" class="text_pole widthNatural" type="number" min="1" max="50" value="10" title="喂给辅助 LLM 的最近对话条数，越多越懂剧情（费 token）"></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_min_tokens" class="flex1">每条提示词最小 token</label><input id="yh_auto_min_tokens" class="text_pole widthNatural" type="number" min="100" max="3000" step="50" value="500" title="每条生图提示词的最小 token 数；不足会带反馈重试一次，仍不足则卡片标注警告"></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_role_name" class="flex1">AI 消息角色名标注</label><select id="yh_auto_role_name" class="text_pole widthNatural margin0"><option value="ai">AI（默认，避免超级卡卡名混淆）</option><option value="card">显示角色卡名</option><option value="none">不标注</option></select></div>
-            <label class="checkbox_label" for="yh_auto_save_mode" style="margin-top:6px;"><input type="checkbox" id="yh_auto_save_mode" class="checkbox"><span>省图模式（仅场景/服饰变化时生图）</span></label>
-            <label class="checkbox_label" for="yh_card_expanded" style="margin-top:6px;"><input type="checkbox" id="yh_card_expanded" class="checkbox"><span>卡片默认展开</span></label>
-            <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_card_layout" class="flex1">卡片排列</label><select id="yh_card_layout" class="text_pole widthNatural margin0"><option value="carousel">左右翻页（默认）</option><option value="vertical">竖排平铺</option><option value="grid">网格</option></select></div>
-          </div>
-          <div class="yh-section">
-            <div class="yh-section-title">总结数据源</div>
-            <div class="flex-container flexnowrap"><label for="yh_auto_source" class="flex1">数据源</label><select id="yh_auto_source" class="text_pole widthNatural margin0"><option value="horae">Horae 时光记忆（默认）</option><option value="custom">云绘自定义</option><option value="snapshot">时光记忆+总结（逐条分组）</option></select></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;"><label for="yh_auto_keep" class="flex1">总结存储天数</label><input id="yh_auto_keep" class="text_pole widthNatural" type="number" min="1" max="30" value="1"></div>
-          </div>
-          <div class="yh-section">
-            <div class="yh-section-title">辅助 LLM 模型</div>
-            <div class="flex-container flexnowrap"><label for="yh_aux_url" class="flex1">地址</label><input id="yh_aux_url" class="text_pole flex1" type="text" placeholder="https://api.openai.com/v1"></div>
-            <div class="flex-container flexnowrap"><label for="yh_aux_key" class="flex1">API Key</label><input id="yh_aux_key" class="text_pole flex1" type="password"></div>
-            <div class="flex-container flexnowrap"><label for="yh_aux_model" class="flex1">模型</label><select id="yh_aux_model" class="text_pole flex1"></select><div id="yh_aux_refresh" class="menu_button menu_button_icon" title="刷新辅助模型列表"><i class="fa-solid fa-rotate"></i></div></div>
-          </div>
-          <div class="yh-section">
-            <div class="yh-section-title">提示词工程（输入框自定义）</div>
-            <div><label for="yh_summary_prompt" class="flex1">总结提示词（system prompt）※留空用内置默认</label><textarea id="yh_summary_prompt" class="text_pole textarea_compact" rows="4" placeholder="留空用喵喵内置完整提示词；自定义可用宏引用默认片段：{{COLUMNS}} 列名 / {{COLUMN_RULES}} 列定义+提取规则 / {{SNAPSHOTS}} 历史快照 / {{HORAE_STATE}} Horae状态 / {{PROMPT_RULES}} 生图规则 / {{COUNT}} 张数"></textarea></div>
-            <div style="margin-top:6px;"><label for="yh_prompt_rules" class="flex1">生图提示词生成规则（追加，留空用默认）</label><textarea id="yh_prompt_rules" class="text_pole textarea_compact" rows="4" placeholder="留空用默认规则（中文自然语言+7方面+一致性铁律）；填写则作为必须遵守的规则追加，例：POV 第一人称视角描述，镜头跟随角色双眼所见…"></textarea></div>
-          </div>
-          <div class="yh-section">
-            <div class="yh-section-title">总结列管理（贯穿提示词/快照/表格）</div>
-            <div id="yh_columns_list" class="yh-cols-list"></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;">
-              <input id="yh_new_col_name" class="text_pole flex1" type="text" placeholder="新列名（如：首饰）">
-              <button id="yh_add_col" class="menu_button menu_button_icon" title="添加列"><i class="fa-solid fa-plus"></i></button>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c1"><span><i class="fa-solid fa-gear"></i> 基本设置</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c1">
+              <div class="flex-container flexnowrap"><label for="yh_auto_count" class="flex1">生图张数</label><input id="yh_auto_count" class="text_pole widthNatural" type="number" min="1" max="10" value="3"></div>
+              <div class="flex-container flexnowrap"><label for="yh_auto_history" class="flex1">上传最近聊天记录条数</label><input id="yh_auto_history" class="text_pole widthNatural" type="number" min="1" max="50" value="10" title="喂给辅助 LLM 的最近对话条数，越多越懂剧情（费 token）"></div>
+              <div class="flex-container flexnowrap"><label for="yh_auto_min_tokens" class="flex1">每条提示词最小 token</label><input id="yh_auto_min_tokens" class="text_pole widthNatural" type="number" min="100" max="3000" step="50" value="500" title="每条生图提示词的最小 token 数；不足会带反馈重试一次，仍不足则卡片标注警告"></div>
+              <div class="flex-container flexnowrap"><label for="yh_auto_role_name" class="flex1">AI 消息角色名标注</label><select id="yh_auto_role_name" class="text_pole widthNatural margin0"><option value="ai">AI（默认，避免超级卡卡名混淆）</option><option value="card">显示角色卡名</option><option value="none">不标注</option></select></div>
+              <div class="yh-sub-card">
+                <div class="yh-switch-row"><b>省图模式（仅场景/服饰变化时生图）</b><label class="yh-switch" for="yh_auto_save_mode"><input type="checkbox" id="yh_auto_save_mode" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+              </div>
+              <div class="yh-sub-card">
+                <div class="yh-switch-row"><b>卡片默认展开</b><label class="yh-switch" for="yh_card_expanded"><input type="checkbox" id="yh_card_expanded" class="checkbox"><span class="yh-switch-slider"></span></label></div>
+              </div>
+              <div class="flex-container flexnowrap"><label for="yh_card_layout" class="flex1">卡片排列</label><select id="yh_card_layout" class="text_pole widthNatural margin0"><option value="carousel">左右翻页（默认）</option><option value="vertical">竖排平铺</option><option value="grid">网格</option></select></div>
             </div>
-            <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">点列名右侧 ✕ 删除；点规则文本可编辑提取规则</div>
           </div>
-          <div class="yh-section">
-            <div class="yh-section-title">手动总结（自动总结失效/不到位时用）</div>
-            <div class="flex-container flexnowrap" style="gap:6px;align-items:center;">
-              <span style="opacity:.8;font-size:12px;white-space:nowrap;">总结最近</span>
-              <input id="yh_manual_count" type="number" min="1" max="200" value="30" class="text_pole" style="width:70px;">
-              <span style="opacity:.8;font-size:12px;white-space:nowrap;">条对话</span>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c2"><span><i class="fa-solid fa-database"></i> 总结数据源</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c2">
+              <div class="flex-container flexnowrap"><label for="yh_auto_source" class="flex1">数据源</label><select id="yh_auto_source" class="text_pole widthNatural margin0"><option value="horae">Horae 时光记忆（默认）</option><option value="custom">云绘自定义</option><option value="snapshot">时光记忆+总结（逐条分组）</option></select></div>
+              <div class="flex-container flexnowrap"><label for="yh_auto_keep" class="flex1">总结存储天数</label><input id="yh_auto_keep" class="text_pole widthNatural" type="number" min="1" max="30" value="1"></div>
             </div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;">
-              <button id="yh_manual_summary" class="menu_button flex1"><i class="fa-solid fa-list-check"></i> 按最新记录总结成表格</button>
-            </div>
-            <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">以最新聊天记录为主总结，结果直接写入下方表格（并更新快照），不生图</div>
           </div>
-          <div class="yh-section">
-            <div class="yh-section-title">当前总结表格（按角色，最新快照）</div>
-            <div id="yh_table_editor" class="yh-table-editor"></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;">
-              <button id="yh_table_save" class="menu_button flex1"><i class="fa-solid fa-floppy-disk"></i> 保存表格到聊天元数据</button>
-              <button id="yh_table_refresh" class="menu_button menu_button_icon" title="刷新"><i class="fa-solid fa-rotate"></i></button>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c3"><span><i class="fa-solid fa-brain"></i> 辅助 LLM 模型（多配置档）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c3">
+              <div class="yh-profile-manage">
+                <select id="yh_llm_profile" class="text_pole flex1" title="切换当前辅助 LLM 配置"></select>
+                <div id="yh_llm_profile_add" class="menu_button menu_button_icon" title="新增辅助 LLM 配置"><i class="fa-solid fa-plus"></i></div>
+                <div id="yh_llm_profile_edit" class="menu_button menu_button_icon" title="重命名当前配置"><i class="fa-solid fa-pen"></i></div>
+                <div id="yh_llm_profile_delete" class="menu_button menu_button_icon" title="删除当前配置"><i class="fa-solid fa-trash"></i></div>
+                <div id="yh_llm_profile_test" class="menu_button menu_button_icon" title="测试当前 LLM 连通性"><i class="fa-solid fa-vial-circle-check"></i></div>
+              </div>
+              <div class="flex-container flexnowrap"><label for="yh_aux_url" class="flex1">地址</label><input id="yh_aux_url" class="text_pole flex1" type="text" placeholder="https://api.openai.com/v1"></div>
+              <div class="flex-container flexnowrap"><label for="yh_aux_key" class="flex1">API Key</label><input id="yh_aux_key" class="text_pole flex1" type="password"></div>
+              <div class="flex-container flexnowrap"><label for="yh_aux_model" class="flex1">模型</label><select id="yh_aux_model" class="text_pole flex1"></select><div id="yh_aux_refresh" class="menu_button menu_button_icon" title="刷新辅助模型列表"><i class="fa-solid fa-rotate"></i></div></div>
+            </div>
+          </div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c4"><span><i class="fa-solid fa-pen-ruler"></i> 提示词工程（输入框自定义）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c4">
+              <div><label for="yh_summary_prompt" class="flex1">总结提示词（system prompt）※留空用内置默认</label><textarea id="yh_summary_prompt" class="text_pole textarea_compact" rows="4" placeholder="留空用喵喵内置完整提示词；自定义可用宏引用默认片段：{{COLUMNS}} 列名 / {{COLUMN_RULES}} 列定义+提取规则 / {{SNAPSHOTS}} 历史快照 / {{HORAE_STATE}} Horae状态 / {{PROMPT_RULES}} 生图规则 / {{COUNT}} 张数"></textarea></div>
+              <div><label for="yh_prompt_rules" class="flex1">生图提示词生成规则（追加，留空用默认）</label><textarea id="yh_prompt_rules" class="text_pole textarea_compact" rows="4" placeholder="留空用默认规则（中文自然语言+7方面+一致性铁律）；填写则作为必须遵守的规则追加，例：POV 第一人称视角描述，镜头跟随角色双眼所见…"></textarea></div>
+            </div>
+          </div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c5"><span><i class="fa-solid fa-table-columns"></i> 总结列管理（贯穿提示词/快照/表格）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c5">
+              <div id="yh_columns_list" class="yh-cols-list"></div>
+              <div class="flex-container flexnowrap">
+                <input id="yh_new_col_name" class="text_pole flex1" type="text" placeholder="新列名（如：首饰）">
+                <button id="yh_add_col" class="menu_button menu_button_icon" title="添加列"><i class="fa-solid fa-plus"></i></button>
+              </div>
+              <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">点列名右侧 ✕ 删除；点规则文本可编辑提取规则</div>
+            </div>
+          </div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c6"><span><i class="fa-solid fa-list-check"></i> 手动总结（自动总结失效/不到位时用）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c6">
+              <div class="flex-container flexnowrap" style="gap:6px;align-items:center;">
+                <span style="opacity:.8;font-size:12px;white-space:nowrap;">总结最近</span>
+                <input id="yh_manual_count" type="number" min="1" max="200" value="30" class="text_pole" style="width:70px;">
+                <span style="opacity:.8;font-size:12px;white-space:nowrap;">条对话</span>
+              </div>
+              <div class="flex-container flexnowrap">
+                <button id="yh_manual_summary" class="menu_button flex1"><i class="fa-solid fa-list-check"></i> 按最新记录总结成表格</button>
+              </div>
+              <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">以最新聊天记录为主总结，结果直接写入下方表格（并更新快照），不生图</div>
+            </div>
+          </div>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c7"><span><i class="fa-solid fa-table"></i> 当前总结表格（按角色，最新快照）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p2_c7">
+              <div id="yh_table_editor" class="yh-table-editor"></div>
+              <div class="flex-container flexnowrap">
+                <button id="yh_table_save" class="menu_button flex1"><i class="fa-solid fa-floppy-disk"></i> 保存表格到聊天元数据</button>
+                <button id="yh_table_refresh" class="menu_button menu_button_icon" title="刷新"><i class="fa-solid fa-rotate"></i></button>
+              </div>
             </div>
           </div>
         </div>
@@ -123,17 +179,19 @@
       <!-- ===== Tab3: 测试/调试 ===== -->
       <div class="yh-tab-pane" id="yh_tab_pane3">
         <div class="yh-pane-body" style="margin-top:8px;">
-          <div class="yh-section">
-            <div class="yh-section-title">LLM 请求/响应调试（点击框查看全文）</div>
-            <div class="margin0" style="opacity:.6;font-size:12px;margin-bottom:4px;">LLM 完整请求体（system + user 拼接）：</div>
-            <div id="yh_test_req" class="yh-test-box" title="点击查看全文"></div>
-            <div class="margin0" style="opacity:.6;font-size:12px;margin:4px 0;">LLM 响应体（原始返回）：</div>
-            <div id="yh_test_resp" class="yh-test-box" title="点击查看全文"></div>
-            <div class="flex-container flexnowrap" style="margin-top:6px;gap:6px;">
-              <button id="yh_test_run" class="menu_button flex1"><i class="fa-solid fa-flask"></i> 测试流程（不生产）</button>
-              <button id="yh_test_clear" class="menu_button"><i class="fa-solid fa-broom"></i> 清空</button>
+          <div class="yh-section yh-panel-card">
+            <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p3_c1"><span><i class="fa-solid fa-flask"></i> LLM 请求/响应调试（点击框查看全文）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
+            <div class="yh-card-body" id="yh_p3_c1">
+              <div class="margin0" style="opacity:.6;font-size:12px;margin-bottom:4px;">LLM 完整请求体（system + user 拼接）：</div>
+              <div id="yh_test_req" class="yh-test-box" title="点击查看全文"></div>
+              <div class="margin0" style="opacity:.6;font-size:12px;margin:4px 0;">LLM 响应体（原始返回）：</div>
+              <div id="yh_test_resp" class="yh-test-box" title="点击查看全文"></div>
+              <div class="flex-container flexnowrap" style="gap:6px;">
+                <button id="yh_test_run" class="menu_button flex1"><i class="fa-solid fa-flask"></i> 测试流程（不生产）</button>
+                <button id="yh_test_clear" class="menu_button"><i class="fa-solid fa-broom"></i> 清空</button>
+              </div>
+              <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">「测试流程」走完收集数据→拼请求→调用LLM→解析全过程，但不调生图；正常聊天自动生图也会实时把请求/响应写进这里。</div>
             </div>
-            <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">「测试流程」走完收集数据→拼请求→调用LLM→解析全过程，但不调生图；正常聊天自动生图也会实时把请求/响应写进这里。</div>
           </div>
         </div>
       </div>

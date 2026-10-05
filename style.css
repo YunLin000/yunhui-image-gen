@@ -356,3 +356,175 @@
     color: var(--SmartThemeBodyColor, #ccc); font-size: 12px; background: transparent;
 }
 .yh-removed-tip { opacity: .7; }
+
+/* ============================================================
+   v2.2 面板卡片化 + toggle 开关 + 三段式总开关 + 配置档管理
+   ============================================================ */
+
+/* 面板内卡片容器（与消息卡片 .yh-card 区分，互不干扰） */
+.yh-panel-card {
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 12px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #222) 35%, transparent);
+}
+.yh-panel-card .yh-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 12px;
+    cursor: pointer;
+    user-select: none;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #2a2a2a) 60%, transparent);
+}
+.yh-panel-card .yh-card-head:hover { filter: brightness(1.12); }
+.yh-panel-card .yh-card-head span {
+    font-weight: bold;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.yh-panel-card .yh-card-chev { transition: transform .2s; opacity: .6; }
+.yh-panel-card.collapsed .yh-card-chev { transform: rotate(-90deg); }
+.yh-panel-card .yh-card-body { padding: 12px 14px; }
+.yh-panel-card.collapsed .yh-card-body { display: none; }
+
+/* toggle 开关（标签生图 / 自动生图） */
+.yh-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    font-size: 14px;
+}
+.yh-switch input { display: none; }
+.yh-switch .yh-switch-slider {
+    width: 38px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--SmartThemeBorderColor, #555);
+    position: relative;
+    transition: background .12s;
+    flex-shrink: 0;
+}
+.yh-switch .yh-switch-slider::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--SmartThemeBodyColor, #eee);
+    transition: transform .12s;
+}
+.yh-switch input:checked + .yh-switch-slider { background: var(--SmartThemeQuoteColor, #2a5); }
+.yh-switch input:checked + .yh-switch-slider::after { transform: translateX(18px); }
+.yh-switch input:disabled + .yh-switch-slider { opacity: .45; }
+.yh-switch input:disabled + .yh-switch-slider::after { opacity: .6; }
+
+/* v2.2.4 开关行：文本左、开关右；只有滑块可点（点文字不触发） */
+.yh-switch-row {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 0;
+}
+.yh-switch-row b {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    cursor: default;
+}
+/* 开关本体：只包 input + 滑块 → 点击范围 = 滑块本身，不再整行可点 */
+.yh-switch-row > .yh-switch {
+    flex-shrink: 0;
+    margin-bottom: 0;
+    gap: 0;
+    padding: 2px;
+}
+/* v2.2.4 子卡片（卡片内嵌的开关组：边框比外层卡片更淡更细） */
+.yh-sub-card {
+    border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor, #444) 45%, transparent);
+    border-radius: 8px;
+    padding: 3px 10px;
+    margin-bottom: 9px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #222) 18%, transparent);
+}
+/* v2.2.4 卡片内行间距（缓解拥挤） */
+.yh-card-body > div,
+.yh-card-body > .yh-switch-row,
+.yh-card-body > .yh-sub-card { margin-bottom: 9px; }
+.yh-card-body > *:last-child { margin-bottom: 0; }
+.yh-card-body .flex-container { gap: 8px; align-items: center; }
+/* v2.2.1 入口卡片（设置面板：悬浮按钮开关） */
+.yh-entry-card {
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    border-radius: 10px;
+    padding: 9px 12px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #222) 35%, transparent);
+}
+/* v2.2.1 打开面板大按钮（更高更按钮感） */
+.yh-big-btn {
+    padding: 11px 0 !important;
+    font-size: 15px !important;
+    border-radius: 8px !important;
+    font-weight: bold;
+    letter-spacing: .5px;
+}
+/* v2.2.1 模式开关卡片（加强颜色 = 当前模式醒目） */
+.yh-mode-card {
+    border-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #2a5) 55%, var(--SmartThemeBorderColor, #444)) !important;
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor, #2a5) 11%, transparent) !important;
+    padding: 3px 6px;
+}
+.yh-mode-card .yh-switch-row { padding: 5px 6px; }
+.yh-mode-card .yh-switch-row b { font-weight: bold; font-size: 16px; }
+.yh-mode-card .yh-switch-slider { width: 44px; height: 24px; }
+.yh-mode-card .yh-switch-slider::after { width: 20px; height: 20px; }
+.yh-mode-card .yh-switch input:checked + .yh-switch-slider::after { transform: translateX(20px); }
+.yh-mode-card.disabled, .yh-mode-card.disabled .yh-switch-row { opacity: .45; }
+/* v2.2.1 公共区容器（测试 tab 隐藏） */
+.yh-common-zone { margin-bottom: 4px; }
+
+/* 三段式总开关（入口抽屉） */
+.yh-seg-wrap { display: flex; align-items: center; gap: 8px; }
+.yh-seg-label { font-size: 12px; opacity: .75; white-space: nowrap; }
+.yh-segmented {
+    display: flex;
+    flex: 1;
+    gap: 2px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #2a2a2a) 70%, transparent);
+    border: 1px solid var(--SmartThemeBorderColor, #444);
+    border-radius: 8px;
+    padding: 2px;
+}
+.yh-seg-btn {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--SmartThemeBodyColor, #ccc);
+    padding: 6px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+.yh-seg-btn:hover { background: color-mix(in srgb, var(--SmartThemeQuoteColor, #5caaff) 20%, transparent); }
+.yh-seg-btn.active { background: var(--SmartThemeQuoteColor, #2a5); color: #fff; font-weight: bold; }
+
+/* 配置档管理行（下拉 + 新建/重命名/删除） */
+.yh-profile-manage { display: flex; align-items: center; gap: 6px; }
