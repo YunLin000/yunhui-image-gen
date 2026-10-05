@@ -16,6 +16,7 @@ import {
     getCurrentChatId,
 } from '../../../../script.js';
 import { regexFromString, saveBase64AsFile } from '../../../utils.js';
+import { Popup } from '../../../popup.js';
 import { humanizedDateTime } from '../../../RossAscends-mods.js';
 
 // ---------------- 常量 ----------------
@@ -226,13 +227,13 @@ function fillLlmProfileSelect() {
     $sel.val(String(s.activeLlmProfile));
 }
 // ---- 生图配置档 CRUD ----
-function addImageProfile() {
+async function addImageProfile() {
     const s = getSettings();
-    const name = window.prompt('新生图配置名称', '新配置');
-    if (name === null) return;
+    const name = await yhPrompt('新生图配置', '配置名称（例如：本地 / 云端）', '新配置');
+    if (name === null || !String(name).trim()) return;
     saveImageProfileFields(); // 当前表单值先存回旧档
     s.imageProfiles.push({
-        name: (name.trim() || ('配置' + (s.imageProfiles.length + 1))),
+        name: String(name).trim(),
         baseUrl: '', apiKey: '', model: '', models: [],
         width: 768, height: 1024, timeout: 360,
     });
@@ -242,20 +243,20 @@ function addImageProfile() {
     updateUI();
     if (!s.silent) toastr.info('已新建生图配置，请填写地址和模型');
 }
-function renameImageProfile() {
+async function renameImageProfile() {
     const s = getSettings();
     const p = getActiveImageProfile(s); if (!p) return;
-    const name = window.prompt('重命名生图配置', p.name || '');
-    if (name === null || !name.trim()) return;
-    p.name = name.trim();
+    const name = await yhPrompt('重命名生图配置', '新名称', p.name || '');
+    if (name === null || !String(name).trim()) return;
+    p.name = String(name).trim();
     saveSettingsDebounced();
     fillImageProfileSelect();
 }
-function deleteImageProfile() {
+async function deleteImageProfile() {
     const s = getSettings();
     if (s.imageProfiles.length <= 1) { toastr.warning('至少保留一个生图配置'); return; }
     const p = getActiveImageProfile(s);
-    if (!window.confirm(`确定删除生图配置「${p.name}」？`)) return;
+    if (!(await yhConfirm('删除生图配置', `确定删除配置「${p.name}」？该配置的地址/Key/模型将一并删除`))) return;
     s.imageProfiles.splice(Number(s.activeImageProfile), 1);
     s.activeImageProfile = Math.max(0, Number(s.activeImageProfile) - 1);
     applyImageProfile(getActiveImageProfile(s));
@@ -277,13 +278,13 @@ function switchImageProfile(idx) {
     if (!s.silent) toastr.info(`已切换生图配置：${getActiveImageProfile(s)?.name || ''}`);
 }
 // ---- 辅助 LLM 配置档 CRUD ----
-function addLlmProfile() {
+async function addLlmProfile() {
     const s = getSettings();
-    const name = window.prompt('新辅助 LLM 配置名称', '新配置');
-    if (name === null) return;
+    const name = await yhPrompt('新辅助 LLM 配置', '配置名称（例如：DeepSeek / 智谱）', '新配置');
+    if (name === null || !String(name).trim()) return;
     saveLlmProfileFields();
     s.llmProfiles.push({
-        name: (name.trim() || ('配置' + (s.llmProfiles.length + 1))),
+        name: String(name).trim(),
         auxUrl: '', auxKey: '', auxModel: '', auxModels: [],
     });
     s.activeLlmProfile = s.llmProfiles.length - 1;
@@ -292,20 +293,20 @@ function addLlmProfile() {
     updateUI();
     if (!s.silent) toastr.info('已新建辅助 LLM 配置，请填写地址和模型');
 }
-function renameLlmProfile() {
+async function renameLlmProfile() {
     const s = getSettings();
     const p = getActiveLlmProfile(s); if (!p) return;
-    const name = window.prompt('重命名辅助 LLM 配置', p.name || '');
-    if (name === null || !name.trim()) return;
-    p.name = name.trim();
+    const name = await yhPrompt('重命名辅助 LLM 配置', '新名称', p.name || '');
+    if (name === null || !String(name).trim()) return;
+    p.name = String(name).trim();
     saveSettingsDebounced();
     fillLlmProfileSelect();
 }
-function deleteLlmProfile() {
+async function deleteLlmProfile() {
     const s = getSettings();
     if (s.llmProfiles.length <= 1) { toastr.warning('至少保留一个辅助 LLM 配置'); return; }
     const p = getActiveLlmProfile(s);
-    if (!window.confirm(`确定删除辅助 LLM 配置「${p.name}」？`)) return;
+    if (!(await yhConfirm('删除辅助 LLM 配置', `确定删除配置「${p.name}」？该配置的地址/Key/模型将一并删除`))) return;
     s.llmProfiles.splice(Number(s.activeLlmProfile), 1);
     s.activeLlmProfile = Math.max(0, Number(s.activeLlmProfile) - 1);
     applyLlmProfile(getActiveLlmProfile(s));
@@ -346,6 +347,26 @@ function setMode(mode) {
     else if (mode === 'auto') { s.enabled = false; s.autoMode.enabled = true; }
     saveSettingsDebounced();
     updateUI(); // 同步 checkbox + 灰化 + 三段式高亮
+}
+
+// ---- v2.2.6 统一弹窗（ST Popup API）----
+// 原生 window.prompt/confirm 在 TauriTavern（安卓 WebView）等环境不弹窗、直接返回 null，
+// 导致「点加号没反应」；统一走 ST 的 Popup API，失败才回落原生。
+async function yhPrompt(title, label, defaultValue = '') {
+    try {
+        if (typeof Popup !== 'undefined' && Popup?.show?.input) {
+            return await Popup.show.input(title, label, defaultValue); // string | null
+        }
+    } catch (e) { console.warn('[云绘] Popup.input 失败，回落原生 prompt', e); }
+    return window.prompt(title, defaultValue);
+}
+async function yhConfirm(title, text) {
+    try {
+        if (typeof Popup !== 'undefined' && Popup?.show?.confirm) {
+            return !!(await Popup.show.confirm(title, text));
+        }
+    } catch (e) { console.warn('[云绘] Popup.confirm 失败，回落原生 confirm', e); }
+    return window.confirm(text);
 }
 
 // ---- v2.2.5 卡片折叠状态记忆 ----
@@ -628,8 +649,7 @@ function bindEvents() {
         const a = getSettings().autoMode;
         const col = a.customColumns && a.customColumns[idx];
         if (!col) return;
-        if (!window.confirm(`确定删除列「${col.name}」？删除后该列不再总结/显示`)) return;
-        removeColumn(idx);
+        yhConfirm('删除列', `确定删除列「${col.name}」？删除后该列不再总结/显示`).then(ok => { if (ok) removeColumn(idx); });
     });
     $('#yh_columns_list').on('change', '.yh-col-rule', function () {
         const idx = parseInt($(this).attr('data-idx'));
@@ -772,6 +792,7 @@ function fillModelSelect(models) {
     models.forEach(m => $sel.append(`<option value="${escapeAttr(m)}">${escapeText(m)}</option>`));
     if (s.model && models.includes(s.model)) $sel.val(s.model);
     else { s.model = models[0]; $sel.val(s.model); saveSettingsDebounced(); }
+    saveImageProfileFields(); // v2.2.6 模型列表/选中同步写回当前档，切档/重启不丢
 }
 
 function fillAuxModelSelect(models) {
@@ -783,6 +804,7 @@ function fillAuxModelSelect(models) {
     models.forEach(m => $sel.append(`<option value="${escapeAttr(m)}">${escapeText(m)}</option>`));
     if (a.auxModel && models.includes(a.auxModel)) $sel.val(a.auxModel);
     else { a.auxModel = models[0]; $sel.val(a.auxModel); saveSettingsDebounced(); }
+    saveLlmProfileFields(); // v2.2.6 模型列表/选中同步写回当前档，切档/重启不丢
 }
 
 // ============================================================
@@ -872,11 +894,11 @@ function refreshPresetSelect() {
     }
 }
 
-function addPreset() {
+async function addPreset() {
     const content = $('#yh_style').val();
     if (!content.trim()) { toastr.warning('画风词为空'); return; }
-    const name = prompt('请输入预设名称：');
-    if (!name || !name.trim()) return;
+    const name = await yhPrompt('新建画风预设', '预设名称', '');
+    if (!name || !String(name).trim()) return;
     const s = getSettings();
     if (s.presets.find(p => p.name === name.trim())) { toastr.error('预设名称已存在'); return; }
     s.presets.push({ name: name.trim(), content });
@@ -898,11 +920,11 @@ function updatePreset() {
     toastr.success(`已更新预设「${name}」`);
 }
 
-function deletePreset() {
+async function deletePreset() {
     const s = getSettings();
     const name = $('#yh_preset_select').val();
     if (!name) { toastr.warning('请先选择预设'); return; }
-    if (!confirm(`删除预设「${name}」？`)) return;
+    if (!(await yhConfirm('删除预设', `删除预设「${name}」？`))) return;
     s.presets = s.presets.filter(x => x.name !== name);
     saveSettingsDebounced();
     refreshPresetSelect();
@@ -2846,5 +2868,5 @@ jQuery(async () => {
         setTimeout(updateUI, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.5`);
+    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.6`);
 });
