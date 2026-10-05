@@ -150,9 +150,11 @@ function migrateProfiles(s) {
     if (!Number.isInteger(s.activeLlmProfile) || s.activeLlmProfile < 0 || s.activeLlmProfile >= s.llmProfiles.length) {
         s.activeLlmProfile = 0;
     }
-    // 激活档值同步到旧字段（保证运行时读 s.baseUrl / a.auxUrl 的旧逻辑一致）
-    applyImageProfile(getActiveImageProfile(s), s);
-    applyLlmProfile(getActiveLlmProfile(s), s);
+    // v2.2.8 重要：这里**不能**做「档 → s」的 apply！
+    // getSettings() 每次调用都会跑 migrateProfiles，若在此 apply，
+    // 会把运行时刚写进 s 的值（例：用户正在输入框里填的地址）用档里的旧值覆盖回去，
+    // 导致「填了地址永远存不进档、刷新时 s.baseUrl 仍为空」。
+    // 「档 → s」的同步只在两处做：① 初始化 createSettings() ② 切档 switchImageProfile/switchLlmProfile
 }
 
 // ---- v2.2 配置档辅助 ----
@@ -169,8 +171,8 @@ function getActiveLlmProfile() {
     return s.llmProfiles[i] || s.llmProfiles[0] || null;
 }
 // UI 字段 → 当前激活档（切档/改值前调用，保证不丢）
-function saveImageProfileFields() {
-    const s = getSettings();
+function saveImageProfileFields(s) {
+    s = s || getSettings();
     const p = getActiveImageProfile(s); if (!p) return;
     p.baseUrl = s.baseUrl || '';
     p.apiKey = s.apiKey || '';
@@ -180,8 +182,8 @@ function saveImageProfileFields() {
     p.timeout = s.timeout || 360;
     if (Array.isArray(s.models)) p.models = s.models.slice();
 }
-function saveLlmProfileFields() {
-    const s = getSettings();
+function saveLlmProfileFields(s) {
+    s = s || getSettings();
     const p = getActiveLlmProfile(s); if (!p) return;
     const a = s.autoMode || {};
     p.auxUrl = a.auxUrl || '';
@@ -457,10 +459,15 @@ async function createSettings() {
     }
 
     bindEvents();
+    // v2.2.8 初始化：把「当前激活档」同步到运行时字段（替代原先 migrateProfiles 里的每次覆盖）
+    const sInit = getSettings();
+    applyImageProfile(getActiveImageProfile(sInit), sInit);
+    applyLlmProfile(getActiveLlmProfile(sInit), sInit);
+    saveSettingsDebounced();
     // v2.2.5 卡片折叠状态记忆（按用户上次操作恢复，首次用默认折叠集）
     applyCollapsedState();
     // 模型下拉：先用持久化列表回显（刷新后不空白），再异步拉取更新
-    const s0 = getSettings();
+    const s0 = sInit;
     if (s0.models?.length) fillModelSelect(s0.models);
     if (s0.autoMode?.auxModels?.length) fillAuxModelSelect(s0.autoMode.auxModels);
     updateUI();
@@ -552,7 +559,7 @@ function bindEvents() {
             let v = isCheck ? $(this).prop('checked') : $(this).val();
             if (isNum) v = parseInt(String(v)) || 0;
             s[key] = v;
-            if (extra) extra();
+            if (extra) extra(s); // v2.2.8 传 s，避免 extra 内部重新 getSettings 触发覆盖
             saveSettingsDebounced();
         });
     };
@@ -616,7 +623,7 @@ function bindEvents() {
             let v = isCheck ? $(this).prop('checked') : $(this).val();
             if (isNum) v = parseInt(String(v)) || 0;
             a[key] = v;
-            if (extra) extra();
+            if (extra) extra(s); // v2.2.8 传 s（saveLlmProfileFields 从 s.autoMode 取值）
             saveSettingsDebounced();
             updateStatusBar();
         });
@@ -2883,5 +2890,5 @@ jQuery(async () => {
         setTimeout(updateUI, 200);
     });
 
-    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.7`);
+    console.log(`[${MODULE_NAME}] 云绘生图扩展已加载 v2.2.8`);
 });
