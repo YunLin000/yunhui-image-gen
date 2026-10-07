@@ -933,7 +933,7 @@ function buildInjectSystemPrompt(a) {
         lenRule = `\n【字数控制】每个画面描述的字数须控制在 ${minN}~${maxN} 字之间（含标点），不足需补充细节，超出需精简到范围内。`;
     }
     return `${base}
-${countRule}${lenRule}`;
+${countRule}${splitRule}${lenRule}`;
 }
 
 // 提取消息中的 <image_prompt> 标签内容（支持多个标签 = 多张图）
