@@ -9,7 +9,7 @@
     right: 12px;
     top: 0; /* 实际位置由 js 像素定位（见 initFab），避免包含块百分比陷阱 */
     transform: none;
-    z-index: 2147483646; /* 最高层之下，确保手机端可见可点 */
+    z-index: 99998; /* 最高层之下，确保手机端可见可点 */
     width: 48px;
     height: 48px;
     border-radius: 50%;
@@ -47,7 +47,7 @@
     height: 100vh;
     height: 100dvh; /* 动态视口：手机地址栏/导航条自适应，避免底部被裁 */
     min-height: 100vh;
-    z-index: 2147483647; /* 最高层，确保盖过 ST 一切 UI */
+    z-index: 99999; /* 最高层，确保盖过 ST 一切 UI */
     background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: stretch;
@@ -424,13 +424,6 @@
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #222) 35%, transparent);
 }
 /* v2.2.1 打开面板大按钮（更高更按钮感） */
-.yh-big-btn {
-    padding: 11px 0 !important;
-    font-size: 15px !important;
-    border-radius: 8px !important;
-    font-weight: bold;
-    letter-spacing: .5px;
-}
 /* v2.2.1 模式开关卡片（加强颜色 = 当前模式醒目） */
 .yh-mode-card {
     border-color: color-mix(in srgb, var(--SmartThemeQuoteColor, #2a5) 55%, var(--SmartThemeBorderColor, #444)) !important;

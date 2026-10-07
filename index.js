@@ -444,12 +444,9 @@ function updateDisabledState() {
     const s = getSettings();
     const en1 = !!s.enabled;
     const en2 = !!s.injectMode?.enabled;
-    // 参数区 + 模式开关卡片：未启用 → 灰
-    $('#yh_pane1_body, .yh-mode-card:has(#yh_enabled)').toggleClass('disabled', !en1);
-    $('#yh_pane2_body, .yh-mode-card:has(#yh_inject_enabled)').toggleClass('disabled', !en2);
-    // tab 按钮同步灰化
-    $('.yh-panel-tab[data-yh-tab="yh_tab_pane1"]').toggleClass('yh-tab-disabled', !en1);
-    $('.yh-panel-tab[data-yh-tab="yh_tab_pane2"]').toggleClass('yh-tab-disabled', !en2);
+    // 只灰化参数区（pane body）；开关卡片和生图模型不灰，保证进面板后能靠开关随时切换模式
+    $('#yh_pane1_body').toggleClass('disabled', !en1);
+    $('#yh_pane2_body').toggleClass('disabled', !en2);
 }
 
 // 扩展面板入口的状态行（v2.2：三段式高亮即状态）
@@ -526,19 +523,9 @@ function bindEvents() {
 
     // ===== v2.0 注入生图设置 =====
     const im = s.injectMode;
-    // 正/负面提示词弹窗编辑（公共区按钮）
-    $('#yh_neg_edit').on('pointerdown', function (e) { e.stopPropagation(); }).on('click', function () {
-        const s2 = getSettings();
-        showBigEditor('负面提示词（生图时拼接，留空则不传该字段）', s2.negativePrompt || '', function (val) {
-            s2.negativePrompt = val; saveSettingsDebounced();
-        });
-    });
-    $('#yh_style_edit').on('pointerdown', function (e) { e.stopPropagation(); }).on('click', function () {
-        const s2 = getSettings();
-        showBigEditor('画风/画质词（正面拼接到生图提示词，留空则不拼）', s2.stylePrompt || '', function (val) {
-            s2.stylePrompt = val; saveSettingsDebounced();
-        });
-    });
+    // 正/负面提示词输入框（公共区·生图接口卡）直接持久化
+    $('#yh_negative').on('input', function () { s.negativePrompt = $(this).val(); saveSettingsDebounced(); });
+    $('#yh_style').on('input', function () { s.stylePrompt = $(this).val(); saveSettingsDebounced(); });
     const persistInj = (id, key, isCheck, isNum) => {
         $(`#${id}`).on('input change', function () {
             let v = isCheck ? $(this).prop('checked') : $(this).val();
@@ -563,7 +550,6 @@ function bindEvents() {
     persistInj('yh_inject_expanded', 'cardExpanded', true);
     // 注入系统提示词：点击弹编辑窗（可自定义，支持 {{宏}}）
     $('#yh_inject_sys_prompt').on('click', openInjectPromptEditor);
-    $('#yh_inject_sys_edit').on('pointerdown', function (e) { e.stopPropagation(); }).on('click', openInjectPromptEditor);
     function openInjectPromptEditor(e) {
         if (e && e.preventDefault) e.preventDefault();
         showBigEditor('注入生图 · 系统提示词（引导 LLM 在回复末尾输出 <image_prompt> 标签，支持 {{宏}}）',

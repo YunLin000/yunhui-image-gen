@@ -28,6 +28,8 @@
           <div class="flex-container flexnowrap"><label for="yh_model" class="flex1">生图模型</label><select id="yh_model" class="text_pole flex1"></select><div id="yh_refresh_models" class="menu_button menu_button_icon" title="刷新模型列表"><i class="fa-solid fa-rotate"></i></div></div>
           <div class="flex-container flexnowrap"><label for="yh_width" class="flex1">图片宽度</label><input id="yh_width" class="text_pole widthNatural" type="number" min="64" max="4096" value="768"><label for="yh_height" class="flex1" style="margin-left:8px;">图片高度</label><input id="yh_height" class="text_pole widthNatural" type="number" min="64" max="4096" value="1024"></div>
           <div class="flex-container flexnowrap"><label for="yh_timeout" class="flex1">生成超时（秒）</label><input id="yh_timeout" class="text_pole widthNatural" type="number" min="30" max="600" value="360" title="默认 6 分钟"></div>
+          <div><label for="yh_negative" class="flex1">负面提示词</label><textarea id="yh_negative" class="text_pole textarea_compact" rows="2" placeholder="blurry, low quality"></textarea></div>
+          <div><label for="yh_style" class="flex1">画风/画质词（正面拼接）</label><textarea id="yh_style" class="text_pole textarea_compact" rows="2" placeholder="写实照片，逼真质感，8k"></textarea></div>
         </div>
       </div>
 
@@ -35,8 +37,6 @@
       <div class="yh-section yh-panel-card">
         <div class="yh-section-title yh-card-head" data-yh-collapse="yh_style_body"><span><i class="fa-solid fa-palette"></i> 画风与提示</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
         <div class="yh-card-body" id="yh_style_body">
-          <div class="flex-container flexnowrap"><label class="flex1">负面提示词</label><button id="yh_neg_edit" class="menu_button flex1"><i class="fa-solid fa-pen"></i> 编辑（弹窗）</button></div>
-          <div class="flex-container flexnowrap"><label class="flex1">画风/画质词（正面拼接）</label><button id="yh_style_edit" class="menu_button flex1"><i class="fa-solid fa-pen"></i> 编辑（弹窗）</button></div>
           <div class="yh-sub-card">
             <div class="yh-switch-row"><b>拼接到提示词前面</b><label class="yh-switch" for="yh_style_prepend"><input type="checkbox" id="yh_style_prepend" class="checkbox"><span class="yh-switch-slider"></span></label></div>
           </div>
@@ -104,9 +104,8 @@
           <div class="yh-section yh-panel-card">
             <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c2"><span><i class="fa-solid fa-file-lines"></i> 注入系统提示词（可自定义）</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
             <div class="yh-card-body" id="yh_p2_c2">
-              <div><label for="yh_inject_sys_prompt" class="flex1">系统提示词（点击弹窗编辑，支持 {{宏}}）</label><textarea id="yh_inject_sys_prompt" class="text_pole textarea_compact" rows="6" placeholder="留空/还原后为内置 PiuPiu 生图提示词协议默认模板"></textarea></div>
+              <div><label for="yh_inject_sys_prompt" class="flex1">系统提示词（点击弹窗编辑，支持 {{宏}}）</label><textarea id="yh_inject_sys_prompt" class="text_pole textarea_compact" rows="6" readonly placeholder="留空/还原后为内置 PiuPiu 生图提示词协议默认模板"></textarea></div>
               <div class="flex-container flexnowrap" style="gap:6px;">
-                <button id="yh_inject_sys_edit" class="menu_button flex1"><i class="fa-solid fa-pen"></i> 打开编辑器</button>
                 <button id="yh_inject_reset" class="menu_button"><i class="fa-solid fa-rotate-left"></i> 还原默认</button>
               </div>
               <div class="margin0" style="opacity:.55;font-size:12px;margin-top:4px;">引导主 LLM 在回复末尾输出 &lt;image_prompt&gt; 标签（一个标签一张图，多标签=多张）。插件捕获标签 → 生图 → 消息尾部卡片左右翻页。还原默认 = 恢复内置 PiuPiu 协议模板。</div>
