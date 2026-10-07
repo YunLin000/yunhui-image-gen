@@ -438,7 +438,7 @@ function updateUI() {
 
     // ===== v2.0 注入生图设置 =====
     const im = s.injectMode;
-    check('yh_inject_enabled', im.enabled);
+    check('yh_inject_mode_enabled', im.enabled);
     set('yh_inject_count', im.imageCount);
     check('yh_inject_expanded', im.cardExpanded);
     set('yh_inject_sys_prompt', im.systemPrompt);
@@ -492,7 +492,7 @@ function bindEvents() {
         s.enabled = $(this).prop('checked');  // 显式同步（persist 也设，保险）
         if ($(this).prop('checked')) {
             s.injectMode.enabled = false;
-            $('#yh_inject_enabled').prop('checked', false);
+            $('#yh_inject_mode_enabled').prop('checked', false);
         }
         saveSettingsDebounced();
         updateDisabledState();
@@ -553,7 +553,7 @@ function bindEvents() {
         });
     };
     // 互斥：启用注入生图 → 标签生图停用
-    $('#yh_inject_enabled').on('change', function () {
+    $('#yh_inject_mode_enabled').on('change', function () {
         s.injectMode.enabled = $(this).prop('checked');
         if ($(this).prop('checked')) {
             s.enabled = false;
@@ -912,12 +912,17 @@ async function handleMessageReceived() {
 function buildInjectSystemPrompt(a) {
     const base = String(a?.systemPrompt || DEFAULT_INJECT_PROMPT).trim();
     const cnt = String(a?.imageCount || 'auto');
-    let countRule;
+    const n = Math.max(1, Math.min(10, parseInt(cnt, 10) || 1));
+    let countRule = '', splitRule = '';
     if (cnt === 'auto') {
-        countRule = '【张数控制】根据当前场景的丰富程度输出 1~3 个 <image_prompt> 标签对（一个标签对一张图）。场景简单/单一动作输出 1 张；场景丰富/多动作/多视角输出 2~3 张。请勿输出其他多余格式。';
+        countRule = '【张数控制】按本回合对话内容中第一人称视角（玩家/你所对话的角色）看到或做出的独立动作/视觉事件数量，输出对应数量的 <image_prompt> 标签对（一个标签对一张图，自动不超过3张）：只有1个动作或事件→输出1张；有2~3个连续动作或事件→输出2~3张。请勿输出其他多余格式。';
+        splitRule = `\n[多图拆分]输出2张及以上时：①按对话中出现先后顺序排列，第一个标签=最早发生/最先看到的画面；②每一个值得入画的动作/事件对应一张图——例如对话内容"摸摸头，然后看着她"→第1张第一人称视角摸头，第2张第一人称视角看着她；③每张图独立完整（环境/光线/画质齐全），各张焦点/视角/瞬间互不重复。`;
+    } else if (n === 1) {
+        countRule = '【张数控制】必须输出恰好 1 个 <image_prompt> 标签对，只描述当前第一人称视角最重要的那个画面。请勿输出其他多余格式。';
+        // 单张：不拼多图拆分规则
     } else {
-        const n = Math.max(1, Math.min(10, parseInt(cnt, 10) || 1));
-        countRule = `【张数控制】必须输出恰好 ${n} 个 <image_prompt> 标签对（一个标签对一张图），从不同角度/瞬间描述当前场景。请勿输出其他多余格式。`;
+        countRule = `【张数控制】必须输出恰好 ${n} 个 <image_prompt> 标签对（一个标签对一张图）。优先按本回合对话内容中第一人称视角看到/做出的独立动作或视觉事件拆分，每个事件一张图；若对话中的动作/事件不足 ${n} 个，从同一事件的不同瞬间/视角补充。请勿输出其他多余格式。`;
+        splitRule = `\n[多图拆分]输出2张及以上时：①按对话中出现先后顺序排列，第一个标签=最早发生/最先看到的画面；②每一个值得入画的动作/事件对应一张图——例如对话内容"摸摸头，然后看着她"→第1张第一人称视角摸头，第2张第一人称视角看着她；③每张图独立完整（环境/光线/画质齐全），各张焦点/视角/瞬间互不重复。`;
     }
     // 字数长度控制段
     let lenRule = '';
