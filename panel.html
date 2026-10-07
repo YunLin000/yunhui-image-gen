@@ -96,6 +96,10 @@
             <div class="yh-section-title yh-card-head" data-yh-collapse="yh_p2_c1"><span><i class="fa-solid fa-gear"></i> 基本设置</span><i class="fa-solid fa-chevron-down yh-card-chev"></i></div>
             <div class="yh-card-body" id="yh_p2_c1">
               <div class="flex-container flexnowrap"><label for="yh_inject_count" class="flex1">生图张数</label><select id="yh_inject_count" class="text_pole widthNatural margin0"><option value="auto">自动（按场景 1~3 张）</option><option value="1">固定 1 张</option><option value="2">固定 2 张</option><option value="3">固定 3 张</option><option value="4">固定 4 张</option><option value="5">固定 5 张</option><option value="6">固定 6 张</option><option value="7">固定 7 张</option><option value="8">固定 8 张</option><option value="9">固定 9 张</option><option value="10">固定 10 张</option></select></div>
+              <div class="flex-container flexnowrap"><label for="yh_inject_len_mode" class="flex1">提示词字数</label><select id="yh_inject_len_mode" class="text_pole widthNatural margin0"><option value="auto">自动（不限）</option><option value="custom">自定义</option></select></div>
+              <div id="yh_inject_len_custom" style="display:none;">
+                <div class="flex-container flexnowrap"><label for="yh_inject_len_min" class="flex1">最少字数</label><input id="yh_inject_len_min" class="text_pole widthNatural" type="number" min="20" max="800" value="80"><label for="yh_inject_len_max" class="flex1" style="margin-left:8px;">最多字数</label><input id="yh_inject_len_max" class="text_pole widthNatural" type="number" min="20" max="800" value="150"></div>
+              </div>
               <div class="yh-sub-card">
                 <div class="yh-switch-row"><b>卡片默认展开</b><label class="yh-switch" for="yh_inject_expanded"><input type="checkbox" id="yh_inject_expanded" class="checkbox"><span class="yh-switch-slider"></span></label></div>
               </div>
