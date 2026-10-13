@@ -89,7 +89,7 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
     // ===== v3.1 主题系统（v3.1.0 新增）=====
     theme: {
         followST: true,          // 跟随酒馆主题（默认 ON；关闭后启用自定义主题）
-        primary: '#ff6b9d',      // 自定义主色（默认与状态栏一致）
+        primary: '#ffffff',      // 自定义主色（v3.2 默认白）
         borderStyle: 'solid',    // solid | dashed | dotted
         borderWidth: 1,          // 1~4px
         borderRadius: 12,        // 6~18px
@@ -479,7 +479,7 @@ function updateUI() {
 const YH_THEME_CSS_ID = 'yunhui-theme-css';
 function injectYhThemeCSS() {
     const t = getSettings().theme || {};
-    const hex = String(t.primary || '#ff6b9d').replace('#', '');
+    const hex = String(t.primary || '#ffffff').replace('#', '');
     const r = parseInt(hex.slice(0, 2), 16) || 255;
     const g = parseInt(hex.slice(2, 4), 16) || 107;
     const b = parseInt(hex.slice(4, 6), 16) || 157;
@@ -489,8 +489,9 @@ function injectYhThemeCSS() {
         const st = t.borderStyle || 'solid';
         const rad = t.borderRadius || 12;
         const btnRad = Math.max(6, rad - 3);
-        css = `:root{--yh-rgb:${r},${g},${b};--yh-light:${t.primary || '#ff6b9d'};}
+        css = `:root{--yh-rgb:${r},${g},${b};--yh-light:${t.primary || '#ffffff'};}
 #chat .mes .mes_text .yh-card{border:${w}px ${st} rgba(${r},${g},${b},.45)!important;border-radius:${rad}px!important;}
+#chat .mes .mes_text .yh-card:not(.collapsed){box-shadow:0 2px 10px rgba(${r},${g},${b},.12)!important;}
 #chat .mes .mes_text .yh-card-header{background:rgba(${r},${g},${b},.10)!important;}
 #chat .mes .mes_text .yh-card-header .yh-title{color:rgba(${r},${g},${b},.92)!important;}
 #chat .mes .mes_text .yh-card-header .yh-toggle{color:rgba(${r},${g},${b},.8)!important;}
@@ -513,8 +514,8 @@ function injectYhThemeCSS() {
 function refreshThemeUI() {
     const t = getSettings().theme || {};
     $('#yh_theme_followST').prop('checked', !!t.followST);
-    $('#yh_theme_color').val(t.primary || '#ff6b9d');
-    $('#yh_theme_color_hex').text(t.primary || '#ff6b9d');
+    $('#yh_theme_color').val(t.primary || '#ffffff');
+    $('#yh_theme_color_hex').text(t.primary || '#ffffff');
     $('#yh_theme_width').val(t.borderWidth || 1);
     $('#yh_theme_width_val').text(`${t.borderWidth || 1}px`);
     $('#yh_theme_radius').val(t.borderRadius || 12);
@@ -559,7 +560,7 @@ function bindThemeEvents() {
         injectYhThemeCSS();
     });
     $('#yh_theme_reset').on('click', function () {
-        s.theme.primary = '#ff6b9d';
+        s.theme.primary = '#ffffff';
         s.theme.borderStyle = 'solid';
         s.theme.borderWidth = 1;
         s.theme.borderRadius = 12;
@@ -1758,6 +1759,7 @@ function openPanel() {
         $.get(`${EXT_FOLDER}/panel.html`).then(html => {
             $('body').append(html);
             bindEvents();
+            bindThemeEvents();   // v3.2 容错路径也绑主题事件（防 DOM 丢失重建后调整不生效）
             doOpenPanel();
         });
         return;
