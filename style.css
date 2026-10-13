@@ -232,7 +232,7 @@
 
 .yh-card-header {
     display: flex; align-items: center; gap: 6px;
-    padding: 6px 10px; cursor: pointer; user-select: none;
+    padding: 8px 12px; cursor: pointer; user-select: none;   /* v3.1 与状态栏折叠条等高（8px 12px） */
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 70%, transparent);
 }
 .yh-card-header:hover { filter: brightness(1.1); }
@@ -481,3 +481,32 @@
 /* v2.2.10 卡片按钮：emoji → FA 图标，视觉统一 */
 .yh-btn i { font-size: 1em; line-height: 1; pointer-events: none; vertical-align: -1px; }
 .yh-imgbtns .yh-btn { padding: 5px 8px; border-radius: 8px; }
+
+/* ============================================================
+   v3.1 主题卡片（跟随酒馆主题 / 自定义主题）
+   ============================================================ */
+.yh-theme-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 9px; font-size: 13px;
+}
+.yh-theme-row:last-child { margin-bottom: 0; }
+.yh-theme-name {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    min-width: 88px; color: var(--SmartThemeBodyColor, #ccc);
+}
+.yh-theme-name i { width: 15px; text-align: center; opacity: .75; }
+.yh-theme-val { font-size: 12px; color: var(--SmartThemeBodyColor, #999); min-width: 36px; text-align: right; }
+#yh_theme_color { width: 46px; height: 30px; border: 1px solid var(--SmartThemeBorderColor, #555); border-radius: 6px; background: transparent; padding: 2px; cursor: pointer; }
+.yh-style-btns { display: flex; gap: 6px; flex: 1; }
+.yh-style-btn {
+    flex: 1; padding: 5px 8px; font-size: 12px;
+    border: 1px solid var(--SmartThemeBorderColor, #555); border-radius: 6px;
+    background: transparent; color: var(--SmartThemeBodyColor, #999);
+    cursor: pointer; opacity: .85; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+}
+.yh-style-btn:hover { opacity: 1; filter: brightness(1.2); }
+.yh-style-btn.active { border-color: var(--SmartThemeQuoteColor, #5caaff); color: var(--SmartThemeQuoteColor, #5caaff); background: color-mix(in srgb, var(--SmartThemeQuoteColor, #5caaff) 12%, transparent); }
+#yh_theme_width, #yh_theme_radius { flex: 1; accent-color: var(--SmartThemeQuoteColor, #5caaff); }
+/* 跟随酒馆主题 ON → 自定义区冻结 */
+.yh-theme-custom.disabled { opacity: .4; pointer-events: none; }

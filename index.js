@@ -86,6 +86,14 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
     // ===== v2.2 多配置档（生图接口 / 辅助 LLM）=====
     imageProfiles: [],        // 生图接口配置档 [{name, baseUrl, apiKey, model, models:[], width, height, timeout}]
     activeImageProfile: 0,    // 当前生图配置档索引
+    // ===== v3.1 主题系统（v3.1.0 新增）=====
+    theme: {
+        followST: true,          // 跟随酒馆主题（默认 ON；关闭后启用自定义主题）
+        primary: '#ff6b9d',      // 自定义主色（默认与状态栏一致）
+        borderStyle: 'solid',    // solid | dashed | dotted
+        borderWidth: 1,          // 1~4px
+        borderRadius: 12,        // 6~18px
+    },
     // ===== v2.0 自动生图模式（模式2）=====
     injectMode: {
         enabled: false,            // 注入生图模式开关（与标签模式互斥）
@@ -111,6 +119,11 @@ function getSettings() {
     if (typeof s.injectMode !== 'object' || s.injectMode === null) s.injectMode = {};
     for (const k of Object.keys(defaultSettings.injectMode)) {
         if (s.injectMode[k] === undefined) s.injectMode[k] = structuredClone(defaultSettings.injectMode[k]);
+    }
+    // theme 是嵌套对象，需逐键补齐（v3.1）
+    if (typeof s.theme !== 'object' || s.theme === null) s.theme = {};
+    for (const k of Object.keys(defaultSettings.theme)) {
+        if (s.theme[k] === undefined) s.theme[k] = structuredClone(defaultSettings.theme[k]);
     }
     // v3 迁移：旧 autoMode.enabled → injectMode.enabled
     if (s.autoMode && s.autoMode.enabled && !s.injectMode.enabled) {
@@ -398,6 +411,7 @@ async function createSettings() {
     }
 
     bindEvents();
+    bindThemeEvents();   // v3.1 主题事件绑定
     // v2.2.8 初始化：把「当前激活档」同步到运行时字段（替代原先 migrateProfiles 里的每次覆盖）
     const sInit = getSettings();
     applyImageProfile(getActiveImageProfile(sInit), sInit);
@@ -454,6 +468,104 @@ function updateUI() {
     fillImageProfileSelect();  // v2.2 配置档下拉
     syncSegmented();           // v2.2 三段式高亮（updateStatusBar 已并入，避免重复调用）
     updateDisabledState();
+    refreshThemeUI();          // v3.1 主题回填 + 注入 CSS
+}
+
+// ============================================================
+//  v3.1 主题系统：跟随酒馆主题 / 自定义主题
+//  - followST=true（默认）：卡片/按钮走酒馆 --SmartTheme* 变量（现状行为）
+//  - followST=false：注入 --yh-rgb/--yh-light，用 !important 覆盖卡片/按钮
+// ============================================================
+const YH_THEME_CSS_ID = 'yunhui-theme-css';
+function injectYhThemeCSS() {
+    const t = getSettings().theme || {};
+    const hex = String(t.primary || '#ff6b9d').replace('#', '');
+    const r = parseInt(hex.slice(0, 2), 16) || 255;
+    const g = parseInt(hex.slice(2, 4), 16) || 107;
+    const b = parseInt(hex.slice(4, 6), 16) || 157;
+    let css = '';
+    if (!t.followST) {
+        const w = t.borderWidth || 1;
+        const st = t.borderStyle || 'solid';
+        const rad = t.borderRadius || 12;
+        const btnRad = Math.max(6, rad - 3);
+        css = `:root{--yh-rgb:${r},${g},${b};--yh-light:${t.primary || '#ff6b9d'};}
+#chat .mes .mes_text .yh-card{border:${w}px ${st} rgba(${r},${g},${b},.45)!important;border-radius:${rad}px!important;}
+#chat .mes .mes_text .yh-card-header{background:rgba(${r},${g},${b},.10)!important;}
+#chat .mes .mes_text .yh-card-header .yh-title{color:rgba(${r},${g},${b},.92)!important;}
+#chat .mes .mes_text .yh-card-header .yh-toggle{color:rgba(${r},${g},${b},.8)!important;}
+#chat .mes .mes_text .yh-btn{border:1px solid rgba(${r},${g},${b},.45)!important;border-radius:${btnRad}px!important;color:rgba(${r},${g},${b},.92)!important;}
+#chat .mes .mes_text .yh-btn:active{background:rgba(${r},${g},${b},.15)!important;}
+#chat .mes .mes_text .yh-dot.active{background:rgba(${r},${g},${b},.95)!important;}
+#chat .mes .mes_text .yh-nav{border:1px solid rgba(${r},${g},${b},.35)!important;color:rgba(${r},${g},${b},.9)!important;}
+`;
+    }
+    let el = document.getElementById(YH_THEME_CSS_ID);
+    if (!el) {
+        el = document.createElement('style');
+        el.id = YH_THEME_CSS_ID;
+        document.head.appendChild(el);
+    }
+    el.textContent = css;
+}
+
+// 面板主题控件回填 + 自定义区冻结
+function refreshThemeUI() {
+    const t = getSettings().theme || {};
+    $('#yh_theme_followST').prop('checked', !!t.followST);
+    $('#yh_theme_color').val(t.primary || '#ff6b9d');
+    $('#yh_theme_color_hex').text(t.primary || '#ff6b9d');
+    $('#yh_theme_width').val(t.borderWidth || 1);
+    $('#yh_theme_width_val').text(`${t.borderWidth || 1}px`);
+    $('#yh_theme_radius').val(t.borderRadius || 12);
+    $('#yh_theme_radius_val').text(`${t.borderRadius || 12}px`);
+    $('.yh-style-btn[data-style]').removeClass('active').filter(`[data-style="${t.borderStyle || 'solid'}"]`).addClass('active');
+    // 跟随主题 → 自定义区冻结（半透明 + 禁点）
+    $('#yh_theme_custom').toggleClass('disabled', !!t.followST);
+    injectYhThemeCSS();
+}
+
+// 主题事件绑定（独立绑定，不依赖 bindEvents 内顺序）
+function bindThemeEvents() {
+    const s = getSettings();
+    $('#yh_theme_followST').on('change', function () {
+        s.theme.followST = $(this).prop('checked');
+        saveSettingsDebounced();
+        refreshThemeUI();
+    });
+    $('#yh_theme_color').on('input', function () {
+        s.theme.primary = $(this).val();
+        $('#yh_theme_color_hex').text(s.theme.primary);
+        saveSettingsDebounced();
+        injectYhThemeCSS();
+    });
+    $('#yh_theme_style').on('click', '.yh-style-btn[data-style]', function () {
+        s.theme.borderStyle = $(this).data('style');
+        $('.yh-style-btn[data-style]').removeClass('active');
+        $(this).addClass('active');
+        saveSettingsDebounced();
+        injectYhThemeCSS();
+    });
+    $('#yh_theme_width').on('input', function () {
+        s.theme.borderWidth = parseInt($(this).val()) || 1;
+        $('#yh_theme_width_val').text(`${s.theme.borderWidth}px`);
+        saveSettingsDebounced();
+        injectYhThemeCSS();
+    });
+    $('#yh_theme_radius').on('input', function () {
+        s.theme.borderRadius = parseInt($(this).val()) || 12;
+        $('#yh_theme_radius_val').text(`${s.theme.borderRadius}px`);
+        saveSettingsDebounced();
+        injectYhThemeCSS();
+    });
+    $('#yh_theme_reset').on('click', function () {
+        s.theme.primary = '#ff6b9d';
+        s.theme.borderStyle = 'solid';
+        s.theme.borderWidth = 1;
+        s.theme.borderRadius = 12;
+        saveSettingsDebounced();
+        refreshThemeUI();
+    });
 }
 
 // 灰化：模式未启用 → 该模式的参数区 + 开关卡片 + tab 同步变灰（v2.2.5 修正方向）
