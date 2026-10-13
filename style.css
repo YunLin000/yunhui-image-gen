@@ -234,6 +234,7 @@
 
 .yh-card-header {
     display: flex; align-items: center; gap: 6px;
+    font-size: 14px;   /* v3.2.4 容器字号对齐状态栏 summary(14px)，消除 line-height 继承差异导致的箭头垂直错位 */
     padding: 8px 12px; cursor: pointer; user-select: none;   /* v3.1 与状态栏折叠条等高（8px 12px） */
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 70%, transparent);
 }
