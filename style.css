@@ -239,7 +239,9 @@
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 70%, transparent);
 }
 .yh-card-header:hover { filter: brightness(1.1); }
-.yh-toggle { font-size: 12px; opacity: .7; min-width: 12px; margin-left: auto; }   /* v3.2.3 箭头移右边+缩小(12px，对齐状态栏) */
+.yh-toggle { font-size: 12px; opacity: .7; min-width: 12px; margin-left: auto; font-family: "Font Awesome 6 Free"; font-weight: 900; }
+.yh-toggle::before { content: "\uf078"; }   /* v3.2.5 默认展开=chevron-down */
+.yh-card.collapsed .yh-toggle::before { content: "\uf054"; }   /* 折叠=chevron-right */
 .yh-title { font-size: 14px; font-weight: 600; opacity: .85; }   /* v3.2.2 字号/粗细对齐状态栏 summary（.9em + 600），折叠态等高 */
 
 .yh-card-body { padding: 6px; }

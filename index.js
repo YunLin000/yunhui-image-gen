@@ -1306,7 +1306,7 @@ function buildYunhuiCardHTML(card, mesId) {
     return `<div id="yh-card-${mesId}" class="yh-card${expanded ? '' : ' collapsed'}" data-mesid="${mesId}">
         <div class="yh-card-header" data-yh-action="toggle">
             <span class="yh-title">☁️ 云绘生图 · ${N}张 · ${statusText}</span>
-            <span class="yh-toggle">${expanded ? '▾' : '▸'}</span>
+            <span class="yh-toggle"></span>
         </div>
         <div class="yh-card-body">${bodyHTML}</div>
     </div>`;
