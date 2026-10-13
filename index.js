@@ -88,7 +88,7 @@ You must insert a <pic prompt="example prompt"> at end of the reply. Prompts are
     activeImageProfile: 0,    // 当前生图配置档索引
     // ===== v3.1 主题系统（v3.1.0 新增）=====
     theme: {
-        followST: true,          // 跟随酒馆主题（默认 ON；关闭后启用自定义主题）
+        followST: false,         // 跟随酒馆主题（默认 OFF；开启后自定义区冻结）
         primary: '#ffffff',      // 自定义主色（v3.2 默认白）
         borderStyle: 'solid',    // solid | dashed | dotted
         borderWidth: 1,          // 1~4px
