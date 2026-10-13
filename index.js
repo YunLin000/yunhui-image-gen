@@ -120,14 +120,14 @@ function getSettings() {
     for (const k of Object.keys(defaultSettings.injectMode)) {
         if (s.injectMode[k] === undefined) s.injectMode[k] = structuredClone(defaultSettings.injectMode[k]);
     }
+    // v3 迁移：旧 autoMode.enabled → injectMode.enabled
+    if (s.autoMode && s.autoMode.enabled && !s.injectMode.enabled) {
+        s.injectMode.enabled = true;
+    }
     // theme 是嵌套对象，需逐键补齐（v3.1）
     if (typeof s.theme !== 'object' || s.theme === null) s.theme = {};
     for (const k of Object.keys(defaultSettings.theme)) {
         if (s.theme[k] === undefined) s.theme[k] = structuredClone(defaultSettings.theme[k]);
-    }
-    // v3 迁移：旧 autoMode.enabled → injectMode.enabled
-    if (s.autoMode && s.autoMode.enabled && !s.injectMode.enabled) {
-        s.injectMode.enabled = true;
     }
     migrateProfiles(s); // v2.2 配置档迁移（旧字段 → 默认档）
     return s;
@@ -471,12 +471,28 @@ function updateUI() {
     refreshThemeUI();          // v3.1 主题回填 + 注入 CSS
 }
 
+// 灰化：模式未启用 → 该模式的参数区 + 开关卡片 + tab 同步变灰（v2.2.5 修正方向）
+// 旧逻辑是「对方启用才灰自己」，导致「自己关掉后不灰、必须刷新才复位」；改为「自己未启用就自己灰」
+function updateDisabledState() {
+    const s = getSettings();
+    const en1 = !!s.enabled;
+    const en2 = !!s.injectMode?.enabled;
+    // 只灰化参数区（pane body）；开关卡片和生图模型不灰，保证进面板后能靠开关随时切换模式
+    $('#yh_pane1_body').toggleClass('disabled', !en1);
+    $('#yh_pane2_body').toggleClass('disabled', !en2);
+}
+
+// 扩展面板入口的状态行（v2.2：三段式高亮即状态）
+function updateStatusBar() {
+    syncSegmented();
+}
+
 // ============================================================
 //  v3.1 主题系统：跟随酒馆主题 / 自定义主题
-//  - followST=true（默认）：卡片/按钮走酒馆 --SmartTheme* 变量（现状行为）
+//  - followST=true：卡片/按钮走酒馆 --SmartTheme* 变量（现状行为）
 //  - followST=false：注入 --yh-rgb/--yh-light，用 !important 覆盖卡片/按钮
 // ============================================================
-const YH_THEME_CSS_ID = 'yunhui-theme-css';
+const YH_THEME_CSS_ID = 'yh_theme_css';
 function injectYhThemeCSS() {
     const t = getSettings().theme || {};
     const hex = String(t.primary || '#ffffff').replace('#', '');
@@ -567,22 +583,6 @@ function bindThemeEvents() {
         saveSettingsDebounced();
         refreshThemeUI();
     });
-}
-
-// 灰化：模式未启用 → 该模式的参数区 + 开关卡片 + tab 同步变灰（v2.2.5 修正方向）
-// 旧逻辑是「对方启用才灰自己」，导致「自己关掉后不灰、必须刷新才复位」；改为「自己未启用就自己灰」
-function updateDisabledState() {
-    const s = getSettings();
-    const en1 = !!s.enabled;
-    const en2 = !!s.injectMode?.enabled;
-    // 只灰化参数区（pane body）；开关卡片和生图模型不灰，保证进面板后能靠开关随时切换模式
-    $('#yh_pane1_body').toggleClass('disabled', !en1);
-    $('#yh_pane2_body').toggleClass('disabled', !en2);
-}
-
-// 扩展面板入口的状态行（v2.2：三段式高亮即状态）
-function updateStatusBar() {
-    syncSegmented();
 }
 
 // ============================================================
@@ -1305,8 +1305,8 @@ function buildYunhuiCardHTML(card, mesId) {
     }
     return `<div id="yh-card-${mesId}" class="yh-card${expanded ? '' : ' collapsed'}" data-mesid="${mesId}">
         <div class="yh-card-header" data-yh-action="toggle">
+            <span class="yh-toggle">${expanded ? '▾' : '▸'}</span>
             <span class="yh-title">☁️ 云绘生图 · ${N}张 · ${statusText}</span>
-            <span class="yh-toggle"></span>
         </div>
         <div class="yh-card-body">${bodyHTML}</div>
     </div>`;
@@ -1759,7 +1759,6 @@ function openPanel() {
         $.get(`${EXT_FOLDER}/panel.html`).then(html => {
             $('body').append(html);
             bindEvents();
-            bindThemeEvents();   // v3.2 容错路径也绑主题事件（防 DOM 丢失重建后调整不生效）
             doOpenPanel();
         });
         return;

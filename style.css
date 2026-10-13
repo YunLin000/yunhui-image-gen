@@ -234,15 +234,16 @@
 
 .yh-card-header {
     display: flex; align-items: center; gap: 6px;
-    font-size: 14px;   /* v3.2.4 容器字号对齐状态栏 summary(14px)，消除 line-height 继承差异导致的箭头垂直错位 */
-    padding: 8px 12px; cursor: pointer; user-select: none;   /* v3.1 与状态栏折叠条等高（8px 12px） */
+    font-size: 14px;   /* v3.2.4 容器字号对齐状态栏 summary(14px) */
+    padding: 8px 12px; cursor: pointer; user-select: none;   /* v3.1 与状态栏折叠条等高 */
+
     background: color-mix(in srgb, var(--SmartThemeBlurTintColor, #333) 70%, transparent);
 }
 .yh-card-header:hover { filter: brightness(1.1); }
 .yh-toggle { font-size: 12px; opacity: .7; min-width: 12px; margin-left: auto; font-family: "Font Awesome 6 Free"; font-weight: 900; }
-.yh-toggle::before { content: "\uf078"; }   /* v3.2.5 默认展开=chevron-down */
+.yh-toggle::before { content: "\uf078"; }   /* v3.2.5 展开=chevron-down */
 .yh-card.collapsed .yh-toggle::before { content: "\uf054"; }   /* 折叠=chevron-right */
-.yh-title { font-size: 14px; font-weight: 600; opacity: .85; }   /* v3.2.2 字号/粗细对齐状态栏 summary（.9em + 600），折叠态等高 */
+.yh-title { font-size: 14px; font-weight: 600; opacity: .85; }   /* v3.2.2 对齐状态栏 */
 
 .yh-card-body { padding: 6px; }
 
@@ -486,6 +487,7 @@
 /* v2.2.10 卡片按钮：emoji → FA 图标，视觉统一 */
 .yh-btn i { font-size: 1em; line-height: 1; pointer-events: none; vertical-align: -1px; }
 .yh-imgbtns .yh-btn { padding: 5px 8px; border-radius: 8px; }
+
 
 /* ============================================================
    v3.1 主题卡片（跟随酒馆主题 / 自定义主题）
