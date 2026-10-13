@@ -239,7 +239,7 @@
 }
 .yh-card-header:hover { filter: brightness(1.1); }
 .yh-toggle { font-size: 14px; opacity: .7; min-width: 14px; }
-.yh-title { font-size: 13px; opacity: .85; }
+.yh-title { font-size: 14px; font-weight: 600; opacity: .85; }   /* v3.2.2 字号/粗细对齐状态栏 summary（.9em + 600），折叠态等高 */
 
 .yh-card-body { padding: 6px; }
 
